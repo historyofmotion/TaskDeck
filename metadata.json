@@ -1,0 +1,6 @@
+{
+  "name": "TaskDeck",
+  "description": "TaskDeck is a sleek, local-first personal task tracking board featuring global priority ranking, focus starred cards, area tagging, and column reordering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
