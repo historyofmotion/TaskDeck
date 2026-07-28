@@ -83,15 +83,8 @@ export const TopBar: React.FC<TopBarProps> = ({
             title="Click title or copy icon to copy board state as plain text"
             className="flex items-center gap-2.5 group text-left rounded-lg px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
-              <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
-                <rect width="64" height="64" rx="16" fill="#0f172a" />
-                <rect x="14" y="38" width="36" height="12" rx="4" fill="#10b981" opacity="0.7" />
-                <rect x="14" y="26" width="36" height="12" rx="4" fill="#06b6d4" opacity="0.85" />
-                <rect x="14" y="14" width="36" height="16" rx="5" fill="#6366f1" />
-                <path d="M19 22L22 25L29 18" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                <rect x="33" y="19" width="12" height="2.5" rx="1.25" fill="#ffffff" opacity="0.9" />
-              </svg>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 shrink-0 group-hover:scale-105 transition-transform">
+              <Kanban className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
               <span className="font-bold tracking-tight text-slate-900 dark:text-slate-100 text-base leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
