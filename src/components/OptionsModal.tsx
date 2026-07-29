@@ -50,7 +50,18 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onClose,
 }) => {
   const modalRef = useModalAccessibility(true, onClose);
+  const backdropMouseDownRef = React.useRef<EventTarget | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'columns' | 'areas'>('general');
+
+  const handleBackdropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    backdropMouseDownRef.current = e.target;
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && backdropMouseDownRef.current === e.currentTarget) {
+      onClose();
+    }
+  };
 
   // General settings state
   const [theme, setTheme] = useState<ThemeOption>(data.settings.theme || 'system');
@@ -153,7 +164,8 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
-      onClick={onClose}
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
     >
       <div
         ref={modalRef}

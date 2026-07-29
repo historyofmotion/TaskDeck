@@ -17,6 +17,17 @@ export const StarLimitModal: React.FC<StarLimitModalProps> = ({
   onCancel,
 }) => {
   const modalRef = useModalAccessibility(true, onCancel);
+  const backdropMouseDownRef = React.useRef<EventTarget | null>(null);
+
+  const handleBackdropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    backdropMouseDownRef.current = e.target;
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && backdropMouseDownRef.current === e.currentTarget) {
+      onCancel();
+    }
+  };
 
   React.useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -27,7 +38,8 @@ export const StarLimitModal: React.FC<StarLimitModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
-      onClick={onCancel}
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
     >
       <div
         ref={modalRef}
