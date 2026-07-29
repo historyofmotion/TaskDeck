@@ -1,28 +1,29 @@
 import React, { useEffect } from 'react';
 import { HelpCircle, X, Keyboard, Sparkles, FileText, CheckCircle } from 'lucide-react';
+import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface HelpModalProps {
   onClose: () => void;
 }
 
 export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
+  const modalRef = useModalAccessibility(true, onClose);
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, []);
 
   const shortcuts = [
     { key: 'N', label: 'Create New Task' },
     { key: 'V', label: 'Toggle View Mode (Board / List)' },
     { key: 'D', label: 'Toggle Card Descriptions' },
     { key: '/', label: 'Focus Search Input' },
+    { key: 'Enter / Space', label: 'Open focused Card Modal' },
+    { key: 'Alt + ↑ / ↓', label: 'Move Task Priority Rank Up/Down' },
+    { key: 'Alt + ← / →', label: 'Move Task Column Left/Right' },
     { key: '?', label: 'Open Help & Shortcuts' },
     { key: 'Esc', label: 'Close Active Modal / Clear Search' },
   ];
@@ -46,6 +47,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
       onClick={onClose}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-modal-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]"
       >
@@ -53,7 +58,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
             <HelpCircle className="w-5 h-5" />
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+            <h3 id="help-modal-title" className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
               Help & Keyboard Shortcuts
             </h3>
           </div>

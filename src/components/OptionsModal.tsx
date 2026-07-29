@@ -18,6 +18,7 @@ import {
   Check,
   FileCheck,
 } from 'lucide-react';
+import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface OptionsModalProps {
   data: BoardData;
@@ -48,6 +49,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onDeleteArea,
   onClose,
 }) => {
+  const modalRef = useModalAccessibility(true, onClose);
   const [activeTab, setActiveTab] = useState<'general' | 'columns' | 'areas'>('general');
 
   // General settings state
@@ -68,21 +70,6 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   const [deletingAreaId, setDeletingAreaId] = useState<string | null>(null);
   const [reassignAreaId, setReassignAreaId] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
-
-  React.useEffect(() => {
-    setColumnsList([...data.columns].sort((a, b) => a.order - b.order));
-  }, [data.columns]);
-
-  React.useEffect(() => {
-    setAreasList([...data.areas]);
-  }, [data.areas]);
-
   // Save General settings
   const handleSaveGeneral = () => {
     onUpdateSettings({
@@ -91,11 +78,25 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     });
   };
 
+  // Reorder Column
+  const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
+    const newIdx = direction === 'up' ? index - 1 : index + 1;
+    if (newIdx < 0 || newIdx >= columnsList.length) return;
+
+    const list = [...columnsList];
+    const [moved] = list.splice(index, 1);
+    list.splice(newIdx, 0, moved);
+
+    const reordered = list.map((c, i) => ({ ...c, order: i }));
+    setColumnsList(reordered);
+    onUpdateColumns(reordered);
+  };
+
   // Add Column
   const handleAddColumn = () => {
     const newCol: Column = {
       id: `c_${Date.now()}`,
-      name: `Column ${columnsList.length + 1}`,
+      name: `New Column ${columnsList.length + 1}`,
       order: columnsList.length,
     };
     const updated = [...columnsList, newCol];
@@ -103,29 +104,14 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     onUpdateColumns(updated);
   };
 
-  // Reorder Column
-  const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= columnsList.length) return;
-
-    const list = [...columnsList];
-    const temp = list[index];
-    list[index] = list[targetIdx];
-    list[targetIdx] = temp;
-
-    const reordered = list.map((c, i) => ({ ...c, order: i }));
-    setColumnsList(reordered);
-    onUpdateColumns(reordered);
-  };
-
-  // Rename Column
+  // Update Column Name
   const handleColumnNameChange = (id: string, name: string) => {
     const updated = columnsList.map((c) => (c.id === id ? { ...c, name } : c));
     setColumnsList(updated);
     onUpdateColumns(updated);
   };
 
-  // Delete Column
+  // Confirm Delete Column
   const handleConfirmDeleteColumn = (colId: string) => {
     if (columnsList.length <= 1) {
       alert('You must keep at least one column on the board.');
@@ -170,12 +156,16 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="options-modal-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <h2 id="options-modal-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             Options & Board Settings
           </h2>
           <button

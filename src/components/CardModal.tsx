@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Area, CardItem, Column } from '../types';
 import { Star, ExternalLink, Archive, Trash2, X, Calendar, Layers, SlidersHorizontal, Check } from 'lucide-react';
 import { extractFirstUrl } from '../utils/helpers';
+import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface CardModalProps {
   card: CardItem | null; // null if creating a new card
@@ -38,6 +39,8 @@ export const CardModal: React.FC<CardModalProps> = ({
   const [progress, setProgress] = useState<number>(card ? card.progress : 0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [starred, setStarred] = useState<boolean>(card ? card.starred : isStarredState);
+
+  const modalRef = useModalAccessibility(true, onClose);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -82,26 +85,23 @@ export const CardModal: React.FC<CardModalProps> = ({
     onClose();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  };
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
       onClick={handleSaveAndClose}
-      onKeyDown={handleKeyDown}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="card-modal-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]"
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            <span id="card-modal-title" className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               {card ? `Card #${card.priority}` : 'New Card'}
             </span>
 

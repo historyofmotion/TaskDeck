@@ -11,7 +11,12 @@ export const Toast: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -29,6 +34,7 @@ export const Toast: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
           <span className="flex-1">{toast.text}</span>
           <button
             onClick={() => onDismiss(toast.id)}
+            aria-label="Dismiss notification"
             className="p-1 rounded text-slate-400 hover:text-slate-200 dark:hover:text-slate-700 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
           >
             <X className="w-3.5 h-3.5" />

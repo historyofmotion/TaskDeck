@@ -139,6 +139,36 @@ export const ListView: React.FC<ListViewProps> = ({
     setDragOverCardId(null);
   };
 
+  const handleRowKeyDown = (e: React.KeyboardEvent, card: CardItem) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenCardModal(card);
+      return;
+    }
+
+    if (e.altKey && e.key === 'ArrowUp') {
+      e.preventDefault();
+      const sortedAllCards = [...cards].sort((a, b) => a.priority - b.priority);
+      const cardIdx = sortedAllCards.findIndex((c) => c.id === card.id);
+      if (cardIdx > 0) {
+        const prevCard = sortedAllCards[cardIdx - 1];
+        onDragDropCard(card.id, prevCard.id, true, card.columnId);
+      }
+      return;
+    }
+
+    if (e.altKey && e.key === 'ArrowDown') {
+      e.preventDefault();
+      const sortedAllCards = [...cards].sort((a, b) => a.priority - b.priority);
+      const cardIdx = sortedAllCards.findIndex((c) => c.id === card.id);
+      if (cardIdx < sortedAllCards.length - 1) {
+        const nextCard = sortedAllCards[cardIdx + 1];
+        onDragDropCard(card.id, nextCard.id, false, card.columnId);
+      }
+      return;
+    }
+  };
+
   return (
     <div className="w-full max-w-[1600px] mx-auto px-4 pb-8">
       {/* List Top Bar Header with Hamburger Menu */}
@@ -262,13 +292,17 @@ export const ListView: React.FC<ListViewProps> = ({
                     )}
 
                     <div
+                      tabIndex={0}
+                      role="row"
+                      aria-label={`Task #${card.priority}: ${card.title}. Column ${column?.name || 'Unknown'}. ${area ? 'Project ' + area.name + '.' : ''} Progress ${isDone ? 100 : card.progress}%. ${dateInfo.label ? dateInfo.label + '.' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, card.id)}
                       onDragOver={(e) => handleDragOverRow(e, card)}
                       onDrop={(e) => handleDrop(e, card)}
                       onDragEnd={handleDragEnd}
                       onClick={() => onOpenCardModal(card)}
-                      className={`grid grid-cols-12 gap-2 px-4 py-2.5 items-center transition-colors cursor-pointer text-xs ${
+                      onKeyDown={(e) => handleRowKeyDown(e, card)}
+                      className={`grid grid-cols-12 gap-2 px-4 py-2.5 items-center transition-colors cursor-pointer text-xs focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
                         isDone
                           ? 'bg-slate-50/40 dark:bg-slate-900/20 text-slate-400 dark:text-slate-500 hover:bg-slate-100/50 dark:hover:bg-slate-800/30'
                           : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'

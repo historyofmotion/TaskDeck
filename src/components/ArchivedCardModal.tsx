@@ -2,6 +2,7 @@ import React from 'react';
 import { CardItem } from '../types';
 import { Archive, RotateCcw, Trash2, X, ExternalLink } from 'lucide-react';
 import { extractFirstUrl } from '../utils/helpers';
+import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface ArchivedCardModalProps {
   card: CardItem;
@@ -16,6 +17,7 @@ export const ArchivedCardModal: React.FC<ArchivedCardModalProps> = ({
   onDeletePermanent,
   onClose,
 }) => {
+  const modalRef = useModalAccessibility(true, onClose);
   const urlInDescription = extractFirstUrl(card.description || '');
 
   React.useEffect(() => {
@@ -31,6 +33,10 @@ export const ArchivedCardModal: React.FC<ArchivedCardModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="archived-card-modal-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
       >
@@ -39,7 +45,7 @@ export const ArchivedCardModal: React.FC<ArchivedCardModalProps> = ({
             <span className="p-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
               <Archive className="w-4 h-4" />
             </span>
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <span id="archived-card-modal-title" className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Archived Task
             </span>
           </div>

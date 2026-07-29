@@ -133,6 +133,55 @@ export const BoardView: React.FC<BoardViewProps> = ({
     setDragOverColumnId(null);
   };
 
+  // Keyboard navigation for card reordering & modal opening
+  const handleCardKeyDown = (e: React.KeyboardEvent, card: CardItem) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenCardModal(card);
+      return;
+    }
+
+    if (e.altKey && e.key === 'ArrowUp') {
+      e.preventDefault();
+      const sortedAllCards = [...cards].sort((a, b) => a.priority - b.priority);
+      const cardIdx = sortedAllCards.findIndex((c) => c.id === card.id);
+      if (cardIdx > 0) {
+        const prevCard = sortedAllCards[cardIdx - 1];
+        onDragDropCard(card.id, prevCard.id, true, card.columnId);
+      }
+      return;
+    }
+
+    if (e.altKey && e.key === 'ArrowDown') {
+      e.preventDefault();
+      const sortedAllCards = [...cards].sort((a, b) => a.priority - b.priority);
+      const cardIdx = sortedAllCards.findIndex((c) => c.id === card.id);
+      if (cardIdx < sortedAllCards.length - 1) {
+        const nextCard = sortedAllCards[cardIdx + 1];
+        onDragDropCard(card.id, nextCard.id, false, card.columnId);
+      }
+      return;
+    }
+
+    if (e.altKey && e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const colIdx = columns.findIndex((c) => c.id === card.columnId);
+      if (colIdx > 0) {
+        onDragDropCard(card.id, null, false, columns[colIdx - 1].id);
+      }
+      return;
+    }
+
+    if (e.altKey && e.key === 'ArrowRight') {
+      e.preventDefault();
+      const colIdx = columns.findIndex((c) => c.id === card.columnId);
+      if (colIdx < columns.length - 1) {
+        onDragDropCard(card.id, null, false, columns[colIdx + 1].id);
+      }
+      return;
+    }
+  };
+
   // Render SVG Progress Donut
   const renderProgressDonut = (pct: number, isDone: boolean) => {
     const val = isDone ? 100 : pct;
@@ -190,6 +239,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
           return (
             <div
               key={column.id}
+              role="region"
+              aria-label={`${column.name} column, ${columnCards.length} tasks`}
               onDragOver={(e) => handleDragOverColumn(e, column.id)}
               onDrop={(e) => handleDropOnColumn(e, column.id)}
               className={`flex-1 min-w-[260px] max-w-[360px] bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border transition-all flex flex-col ${
@@ -228,13 +279,17 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
                       {/* Card Tile */}
                       <div
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Task #${card.priority}: ${card.title}. Column ${column.name}. ${area ? 'Project ' + area.name + '.' : ''} Progress ${isDoneCol ? 100 : card.progress}%. ${dateInfo.label ? dateInfo.label + '.' : ''}`}
                         draggable
                         onDragStart={(e) => handleDragStart(e, card.id)}
                         onDragOver={(e) => handleDragOverCard(e, card)}
                         onDrop={(e) => handleDropOnCard(e, card)}
                         onDragEnd={handleDragEnd}
                         onClick={() => onOpenCardModal(card)}
-                        className={`group relative bg-white dark:bg-slate-800/90 rounded-xl shadow-2xs hover:shadow-md border transition-all cursor-pointer overflow-hidden p-3 pl-4 ${
+                        onKeyDown={(e) => handleCardKeyDown(e, card)}
+                        className={`group relative bg-white dark:bg-slate-800/90 rounded-xl shadow-2xs hover:shadow-md border transition-all cursor-pointer overflow-hidden p-3 pl-4 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
                           draggedCardId === card.id ? 'opacity-40 scale-98' : ''
                         } ${
                           isStarred
