@@ -61,17 +61,24 @@ export const ListView: React.FC<ListViewProps> = ({
     return 'bg-purple-500';
   };
 
-  // Renumber/Reorder cards by status priority sequence: Active/In Progress -> Blocked -> Pending -> Done
+  // Renumber/Reorder cards by status priority sequence: (Active/In Progress & Blocked) -> Pending -> Done
   const handleRenumberByStatus = () => {
     if (!onReorderAllCards) return;
 
     const getStatusCategoryOrder = (columnId: string): number => {
       const colName = (columnMap.get(columnId)?.name || '').toLowerCase();
-      if (colName.includes('progress') || colName.includes('in progress') || colName.includes('active')) return 1;
-      if (colName.includes('blocked')) return 2;
-      if (colName.includes('pending')) return 3;
-      if (colName.includes('done')) return 4;
-      return 5;
+      // Group Active/In Progress and Blocked together so they preserve relative priorities
+      if (
+        colName.includes('progress') ||
+        colName.includes('in progress') ||
+        colName.includes('active') ||
+        colName.includes('blocked')
+      ) {
+        return 1;
+      }
+      if (colName.includes('pending')) return 2;
+      if (colName.includes('done')) return 3;
+      return 4;
     };
 
     const sorted = [...cards].sort((a, b) => {
@@ -221,7 +228,7 @@ export const ListView: React.FC<ListViewProps> = ({
                   <div>
                     <div className="font-semibold">Renumber by Status</div>
                     <div className="text-[11px] text-slate-400 dark:text-slate-500 font-normal leading-tight mt-0.5">
-                      Reorder: Active / In Progress → Blocked → Pending → Done
+                      Reorder: Active & Blocked → Pending → Done
                     </div>
                   </div>
                 </button>
