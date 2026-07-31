@@ -7,8 +7,9 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
+  CheckCircle2,
 } from 'lucide-react';
-import { extractFirstUrl, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
+import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
 import { DescriptionFlyout } from './DescriptionFlyout';
 
 interface BoardViewProps {
@@ -266,7 +267,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
                 {columnCards.map((card, cardIndex) => {
                   const area = card.areaId ? areaMap.get(card.areaId) : null;
                   const url = extractFirstUrl(card.description || '');
-                  const dateInfo = formatDueDateLabel(card.dueDate);
+                  const dateInfo = formatDueDateLabel(card.dueDate, isDoneCol);
+                  const completedInfo = isDoneCol ? formatCompletedAtLabel(card.completedAt) : '';
                   const isStarred = card.starred;
                   const isDropTarget = dragOverCardId === card.id;
 
@@ -367,8 +369,13 @@ export const BoardView: React.FC<BoardViewProps> = ({
                               </span>
                             )}
 
-                            {/* Due Date Badge */}
-                            {dateInfo.label && (
+                            {/* Completed Date or Due Date Badge */}
+                            {isDoneCol && completedInfo ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-slate-100 text-slate-500 dark:bg-slate-700/80 dark:text-slate-400 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                <span>{completedInfo}</span>
+                              </span>
+                            ) : dateInfo.label ? (
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
                                   dateInfo.isOverdue
@@ -380,7 +387,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                               >
                                 {dateInfo.label}
                               </span>
-                            )}
+                            ) : null}
 
                             {/* Link Icon */}
                             {url && (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Area, CardItem, Column } from '../types';
 import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban } from 'lucide-react';
-import { extractFirstUrl, formatDueDateLabel, getContrastColor } from '../utils/helpers';
+import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor } from '../utils/helpers';
 
 interface ListViewProps {
   cards: CardItem[];
@@ -364,7 +364,8 @@ export const ListView: React.FC<ListViewProps> = ({
               const isBlocked = column?.name.toLowerCase().includes('blocked');
               const isDone = column?.id === doneColId;
               const isFirstDoneCard = isDone && (index === 0 || visibleCards[index - 1].columnId !== doneColId);
-              const dateInfo = formatDueDateLabel(card.dueDate);
+              const dateInfo = formatDueDateLabel(card.dueDate, isDone);
+              const completedInfo = isDone ? formatCompletedAtLabel(card.completedAt) : '';
               const url = extractFirstUrl(card.description || '');
               const isDropTarget = dragOverCardId === card.id;
 
@@ -500,9 +501,14 @@ export const ListView: React.FC<ListViewProps> = ({
 
                       {/* Combined Progress & Due Date Column (Distinct Right-Justified Separation) */}
                       <div className="col-span-4 sm:col-span-3 md:col-span-3 lg:col-span-3 flex items-center justify-end gap-3 sm:gap-4 text-right">
-                        {/* Optional Due Date */}
+                        {/* Optional Due Date or Completed Date */}
                         <div className="flex items-center justify-end min-w-0">
-                          {dateInfo.label ? (
+                          {isDone && completedInfo ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                              <span className="truncate">{completedInfo}</span>
+                            </span>
+                          ) : dateInfo.label ? (
                             <span
                               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
                                 isDone
@@ -520,8 +526,8 @@ export const ListView: React.FC<ListViewProps> = ({
                           ) : null}
                         </div>
 
-                        {/* Subtle Divider when Due Date is present */}
-                        {dateInfo.label && (
+                        {/* Subtle Divider when Date is present */}
+                        {(completedInfo || dateInfo.label) && (
                           <div className="w-px h-3 bg-slate-200 dark:bg-slate-700/80 shrink-0 hidden sm:block" />
                         )}
 

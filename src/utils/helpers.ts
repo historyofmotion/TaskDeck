@@ -28,7 +28,10 @@ export function getContrastColor(hexColor: string): string {
   return yiq >= 140 ? '#0f172a' : '#ffffff';
 }
 
-export function formatDueDateLabel(dateStr: string | null): {
+export function formatDueDateLabel(
+  dateStr: string | null,
+  isDone?: boolean
+): {
   label: string;
   isOverdue: boolean;
   isToday: boolean;
@@ -53,6 +56,9 @@ export function formatDueDateLabel(dateStr: string | null): {
   const formattedDate = `${monthNames[targetDate.getMonth()]} ${targetDate.getDate()}`;
 
   if (diffDays < 0) {
+    if (isDone) {
+      return { label: `Due ${formattedDate}`, isOverdue: false, isToday: false };
+    }
     return { label: `${formattedDate} (Overdue)`, isOverdue: true, isToday: false };
   } else if (diffDays === 0) {
     return { label: 'Due Today', isOverdue: false, isToday: true };
@@ -60,6 +66,30 @@ export function formatDueDateLabel(dateStr: string | null): {
     return { label: 'Due Tomorrow', isOverdue: false, isToday: false };
   } else {
     return { label: `Due ${formattedDate}`, isOverdue: false, isToday: false };
+  }
+}
+
+export function formatCompletedAtLabel(completedAtStr: string | null): string {
+  if (!completedAtStr) return '';
+  const completedDate = new Date(completedAtStr);
+  if (isNaN(completedDate.getTime())) return '';
+
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const completedUtc = Date.UTC(completedDate.getFullYear(), completedDate.getMonth(), completedDate.getDate());
+
+  const diffDays = Math.round((todayUtc - completedUtc) / (1000 * 3600 * 24));
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  if (diffDays >= 0 && diffDays < 7) {
+    if (diffDays === 0) {
+      return 'Done Today';
+    }
+    return `Done ${dayNames[completedDate.getDay()]}`;
+  } else {
+    return `Done ${monthNames[completedDate.getMonth()]} ${completedDate.getDate()}`;
   }
 }
 
