@@ -102,6 +102,15 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     });
   };
 
+  const handleSelectTheme = (selectedTheme: ThemeOption) => {
+    setTheme(selectedTheme);
+    onUpdateSettings({
+      theme: selectedTheme,
+      appIcon,
+      autoArchiveDays: Math.max(3, Math.min(90, autoArchiveDays)),
+    });
+  };
+
   // Reorder Column
   const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
     const newIdx = direction === 'up' ? index - 1 : index + 1;
@@ -280,10 +289,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                   <div className="grid grid-cols-3 gap-1.5">
                     <button
                       type="button"
-                      onClick={() => {
-                        setTheme('light');
-                        onUpdateSettings({ theme: 'light', autoArchiveDays });
-                      }}
+                      onClick={() => handleSelectTheme('light')}
                       className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-xs font-medium transition-all ${
                         theme === 'light'
                           ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-500 shadow-2xs'
@@ -296,10 +302,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setTheme('dark');
-                        onUpdateSettings({ theme: 'dark', autoArchiveDays });
-                      }}
+                      onClick={() => handleSelectTheme('dark')}
                       className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-xs font-medium transition-all ${
                         theme === 'dark'
                           ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-500 shadow-2xs'
@@ -312,10 +315,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setTheme('system');
-                        onUpdateSettings({ theme: 'system', autoArchiveDays });
-                      }}
+                      onClick={() => handleSelectTheme('system')}
                       className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-xs font-medium transition-all ${
                         theme === 'system'
                           ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-500 shadow-2xs'

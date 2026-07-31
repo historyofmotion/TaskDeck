@@ -107,7 +107,7 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Theme application
+  // Theme application with live system listener support
   useEffect(() => {
     const theme = boardData.settings.theme || 'system';
     const root = document.documentElement;
@@ -115,16 +115,31 @@ export default function App() {
     const applyDark = () => root.classList.add('dark');
     const applyLight = () => root.classList.remove('dark');
 
-    if (theme === 'dark') {
-      applyDark();
-    } else if (theme === 'light') {
-      applyLight();
-    } else {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const updateTheme = () => {
+      if (theme === 'dark') {
         applyDark();
-      } else {
+      } else if (theme === 'light') {
         applyLight();
+      } else {
+        if (mediaQuery.matches) {
+          applyDark();
+        } else {
+          applyLight();
+        }
       }
+    };
+
+    updateTheme();
+
+    if (theme === 'system') {
+      const handleSystemChange = (e: MediaQueryListEvent) => {
+        if (e.matches) applyDark();
+        else applyLight();
+      };
+      mediaQuery.addEventListener('change', handleSystemChange);
+      return () => mediaQuery.removeEventListener('change', handleSystemChange);
     }
   }, [boardData.settings.theme]);
 
@@ -649,7 +664,10 @@ export default function App() {
           data={boardData}
           connectedFileName={connectedFileName}
           onUpdateSettings={(newSettings) =>
-            updateBoardData({ ...boardData, settings: newSettings })
+            updateBoardData({
+              ...boardData,
+              settings: { ...boardData.settings, ...newSettings },
+            })
           }
           onConnectFile={handleConnectFile}
           onCreateFile={handleCreateFile}
