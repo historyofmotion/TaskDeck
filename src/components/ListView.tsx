@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Area, CardItem, Column } from '../types';
-import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye } from 'lucide-react';
+import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban } from 'lucide-react';
 import { extractFirstUrl, formatDueDateLabel, getContrastColor } from '../utils/helpers';
 
 interface ListViewProps {
@@ -86,6 +86,65 @@ export const ListView: React.FC<ListViewProps> = ({
       const catB = getStatusCategoryOrder(b.columnId);
       if (catA !== catB) {
         return catA - catB;
+      }
+      return a.priority - b.priority;
+    });
+
+    const renumbered = sorted.map((card, idx) => ({
+      ...card,
+      priority: idx + 1,
+    }));
+
+    onReorderAllCards(renumbered);
+  };
+
+  // Renumber/Reorder cards by project priority order:
+  // For each project: Active & Blocked -> Pending -> Next Project. All Done items at bottom.
+  const handleRenumberByProjectPriority = () => {
+    if (!onReorderAllCards) return;
+
+    const areaOrderMap = new Map<string | null, number>();
+    areas.forEach((area, idx) => {
+      areaOrderMap.set(area.id, idx);
+    });
+    // Tasks with no project (areaId === null) get placed after all defined projects
+    areaOrderMap.set(null, areas.length);
+
+    const getStatusCategory = (columnId: string): 'active' | 'blocked' | 'pending' | 'done' => {
+      if (columnId === doneColId) return 'done';
+      const name = (columnMap.get(columnId)?.name || '').toLowerCase();
+      if (name.includes('done')) return 'done';
+      if (name.includes('blocked')) return 'blocked';
+      if (name.includes('pending')) return 'pending';
+      return 'active';
+    };
+
+    const getCardSortScore = (card: CardItem) => {
+      const statusCat = getStatusCategory(card.columnId);
+
+      // All Done items across all projects go to the very bottom
+      if (statusCat === 'done') {
+        const areaIdx = areaOrderMap.get(card.areaId) ?? areas.length;
+        return 1000000 + areaIdx * 100;
+      }
+
+      const areaIdx = areaOrderMap.get(card.areaId) ?? areas.length;
+      // Stage 0: Active / In Progress
+      // Stage 1: Blocked
+      // Stage 2: Pending
+      let stageIdx = 0;
+      if (statusCat === 'active') stageIdx = 0;
+      else if (statusCat === 'blocked') stageIdx = 1;
+      else if (statusCat === 'pending') stageIdx = 2;
+
+      return areaIdx * 1000 + stageIdx * 100;
+    };
+
+    const sorted = [...cards].sort((a, b) => {
+      const scoreA = getCardSortScore(a);
+      const scoreB = getCardSortScore(b);
+      if (scoreA !== scoreB) {
+        return scoreA - scoreB;
       }
       return a.priority - b.priority;
     });
@@ -215,7 +274,7 @@ export const ListView: React.FC<ListViewProps> = ({
                   List View Actions
                 </div>
 
-                {/* Reorder / Renumber Action */}
+                {/* Reorder / Renumber by Status Action */}
                 <button
                   type="button"
                   onClick={() => {
@@ -229,6 +288,24 @@ export const ListView: React.FC<ListViewProps> = ({
                     <div className="font-semibold">Renumber by Status</div>
                     <div className="text-[11px] text-slate-400 dark:text-slate-500 font-normal leading-tight mt-0.5">
                       Reorder: Active & Blocked → Pending → Done
+                    </div>
+                  </div>
+                </button>
+
+                {/* Reorder / Renumber by Project Priority Action */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleRenumberByProjectPriority();
+                  }}
+                  className="w-full text-left px-3 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-purple-950/50 hover:text-purple-600 dark:hover:text-purple-400 flex items-start gap-2.5 transition-colors group border-t border-slate-100 dark:border-slate-800/60"
+                >
+                  <FolderKanban className="w-4 h-4 text-purple-500 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                  <div>
+                    <div className="font-semibold">Renumber by Project Priority</div>
+                    <div className="text-[11px] text-slate-400 dark:text-slate-500 font-normal leading-tight mt-0.5">
+                      Active & Blocked → Pending → Next Project (Done at bottom)
                     </div>
                   </div>
                 </button>

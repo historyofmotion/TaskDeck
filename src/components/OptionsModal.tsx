@@ -152,6 +152,19 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     onUpdateAreas(updated);
   };
 
+  // Reorder Area (Project)
+  const handleMoveArea = (index: number, direction: 'up' | 'down') => {
+    const newIdx = direction === 'up' ? index - 1 : index + 1;
+    if (newIdx < 0 || newIdx >= areasList.length) return;
+
+    const list = [...areasList];
+    const [moved] = list.splice(index, 1);
+    list.splice(newIdx, 0, moved);
+
+    setAreasList(list);
+    onUpdateAreas(list);
+  };
+
   // Confirm Area deletion
   const handleConfirmDeleteArea = () => {
     if (!deletingAreaId) return;
@@ -523,7 +536,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               )}
 
               <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
-                {areasList.map((area) => (
+                {areasList.map((area, index) => (
                   <div
                     key={area.id}
                     className="flex items-center gap-2.5 p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40"
@@ -542,13 +555,34 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       className="flex-1 px-2.5 py-1 rounded text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => setDeletingAreaId(area.id)}
-                      className="p-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => handleMoveArea(index, 'up')}
+                        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
+                        title="Move project up (increase project priority)"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === areasList.length - 1}
+                        onClick={() => handleMoveArea(index, 'down')}
+                        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30"
+                        title="Move project down (decrease project priority)"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingAreaId(area.id)}
+                        className="p-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 shrink-0"
+                        title="Delete project"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
