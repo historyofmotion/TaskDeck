@@ -185,9 +185,9 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
   // Render SVG Progress Donut
   const renderProgressDonut = (pct: number, isDone: boolean) => {
-    const val = isDone ? 100 : pct;
+    const val = isDone ? 100 : Math.max(0, Math.min(100, pct));
 
-    const radius = 8;
+    const radius = 6;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (val / 100) * circumference;
 
@@ -197,18 +197,18 @@ export const BoardView: React.FC<BoardViewProps> = ({
           <circle
             cx="8"
             cy="8"
-            r={6.5}
+            r={radius}
             className="stroke-slate-200 dark:stroke-slate-700"
-            strokeWidth="2.5"
+            strokeWidth="2"
             fill="transparent"
           />
           {val > 0 && (
             <circle
               cx="8"
               cy="8"
-              r={6.5}
+              r={radius}
               className="stroke-indigo-600 dark:stroke-indigo-400 transition-all duration-300"
-              strokeWidth="2.5"
+              strokeWidth="2"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
