@@ -112,8 +112,14 @@ export default function App() {
     const theme = boardData.settings.theme || 'system';
     const root = document.documentElement;
 
-    const applyDark = () => root.classList.add('dark');
-    const applyLight = () => root.classList.remove('dark');
+    const applyDark = () => {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    };
+    const applyLight = () => {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    };
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
