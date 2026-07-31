@@ -24,8 +24,10 @@ import {
   moveCardToColumnEnd,
   normalizePriorities,
   reorderCardsInGlobalSequence,
+  resortWithStarredTop,
   runAutoArchive,
 } from './utils/helpers';
+import { updateBrowserFavicon } from './utils/appIconUtils';
 import { TopBar } from './components/TopBar';
 import { ActionLine } from './components/ActionLine';
 import { BoardView } from './components/BoardView';
@@ -126,6 +128,11 @@ export default function App() {
     }
   }, [boardData.settings.theme]);
 
+  // App Icon / Favicon application
+  useEffect(() => {
+    updateBrowserFavicon(boardData.settings.appIcon);
+  }, [boardData.settings.appIcon]);
+
   // Keyboard Shortcuts: N = New, D = Details, V = View Toggle, ? = Help
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -215,7 +222,7 @@ export default function App() {
       // Simply unstar
       if (cardId) {
         const updated = boardData.cards.map((c) => (c.id === cardId ? { ...c, starred: false } : c));
-        updateBoardData({ ...boardData, cards: updated });
+        updateBoardData({ ...boardData, cards: resortWithStarredTop(updated) });
       } else {
         setIsEditingCardStarred(false);
       }
@@ -226,7 +233,7 @@ export default function App() {
       } else {
         if (cardId) {
           const updated = boardData.cards.map((c) => (c.id === cardId ? { ...c, starred: true } : c));
-          updateBoardData({ ...boardData, cards: updated });
+          updateBoardData({ ...boardData, cards: resortWithStarredTop(updated) });
         } else {
           setIsEditingCardStarred(true);
         }
@@ -248,7 +255,7 @@ export default function App() {
       setIsEditingCardStarred(true);
     }
 
-    updateBoardData({ ...boardData, cards: updated });
+    updateBoardData({ ...boardData, cards: resortWithStarredTop(updated) });
     setPendingStarCard(null);
     addToast(`Starred "${pendingStarCard.title}" and unstarred lowest focus task.`, 'info');
   };
@@ -296,7 +303,7 @@ export default function App() {
 
     updateBoardData({
       ...boardData,
-      cards: normalizePriorities(updatedCards),
+      cards: resortWithStarredTop(updatedCards),
     });
 
     addToast(cardData.id ? 'Task updated!' : 'Task created!', 'success');
@@ -547,6 +554,7 @@ export default function App() {
 
       {/* Top Header Controls */}
       <TopBar
+        appIcon={boardData.settings.appIcon}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         showDetails={showDetails}

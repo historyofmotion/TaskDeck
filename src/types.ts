@@ -3,6 +3,7 @@ export type ThemeOption = 'light' | 'dark' | 'system';
 export interface Settings {
   autoArchiveDays: number;
   theme: ThemeOption;
+  appIcon?: string;
 }
 
 export interface Area {

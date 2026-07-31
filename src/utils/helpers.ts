@@ -71,6 +71,17 @@ export function normalizePriorities(cards: CardItem[]): CardItem[] {
   }));
 }
 
+// Resort cards ensuring starred items always take top priority (1, 2, 3...) before non-starred items
+export function resortWithStarredTop(cards: CardItem[]): CardItem[] {
+  const sorted = [...cards].sort((a, b) => {
+    if (a.starred !== b.starred) {
+      return a.starred ? -1 : 1;
+    }
+    return a.priority - b.priority;
+  });
+  return normalizePriorities(sorted);
+}
+
 // Reorder cards when dragging
 export function reorderCardsInGlobalSequence(
   allCards: CardItem[],

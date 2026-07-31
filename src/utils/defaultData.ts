@@ -5,6 +5,7 @@ export const INITIAL_BOARD_DATA: BoardData = {
   settings: {
     autoArchiveDays: 7,
     theme: 'system',
+    appIcon: 'kanban',
   },
   areas: [
     { id: 'a1', name: 'Work', color: '#3B82F6' },

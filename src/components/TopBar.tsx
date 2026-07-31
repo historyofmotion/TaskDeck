@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Area, ViewMode } from '../types';
+import { getAppIconConfig } from '../utils/appIconUtils';
 import {
   Copy,
   Kanban,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 
 interface TopBarProps {
+  appIcon?: string;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   showDetails: boolean;
@@ -30,6 +32,7 @@ interface TopBarProps {
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
+  appIcon,
   viewMode,
   onViewModeChange,
   showDetails,
@@ -45,6 +48,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onCopyBoard,
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const iconConfig = getAppIconConfig(appIcon);
+  const DynamicIcon = iconConfig.IconComponent;
 
   // Global search shortcut handler
   useEffect(() => {
@@ -84,8 +89,8 @@ export const TopBar: React.FC<TopBarProps> = ({
             aria-label="Copy board status to clipboard"
             className="flex items-center gap-2.5 group text-left rounded-lg px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 shrink-0 group-hover:scale-105 transition-transform">
-              <Kanban className="w-4 h-4 text-white" />
+            <div className={`w-8 h-8 rounded-lg bg-gradient-to-tr ${iconConfig.gradientClass} flex items-center justify-center text-white shadow-md ${iconConfig.shadowClass} shrink-0 group-hover:scale-105 transition-transform`}>
+              <DynamicIcon className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
               <span className="font-bold tracking-tight text-slate-900 dark:text-slate-100 text-base leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">

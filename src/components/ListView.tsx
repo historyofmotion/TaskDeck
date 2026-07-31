@@ -82,6 +82,10 @@ export const ListView: React.FC<ListViewProps> = ({
     };
 
     const sorted = [...cards].sort((a, b) => {
+      // Starred items always take top priority (#1, #2, #3...)
+      if (a.starred !== b.starred) {
+        return a.starred ? -1 : 1;
+      }
       const catA = getStatusCategoryOrder(a.columnId);
       const catB = getStatusCategoryOrder(b.columnId);
       if (catA !== catB) {
@@ -100,6 +104,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
   // Renumber/Reorder cards by project priority order:
   // For each project: Active & Blocked -> Pending -> Next Project. All Done items at bottom.
+  // Starred items are placed at the very top of priority sequence.
   const handleRenumberByProjectPriority = () => {
     if (!onReorderAllCards) return;
 
@@ -141,6 +146,10 @@ export const ListView: React.FC<ListViewProps> = ({
     };
 
     const sorted = [...cards].sort((a, b) => {
+      // Starred items always take top priority (#1, #2, #3...)
+      if (a.starred !== b.starred) {
+        return a.starred ? -1 : 1;
+      }
       const scoreA = getCardSortScore(a);
       const scoreB = getCardSortScore(b);
       if (scoreA !== scoreB) {
