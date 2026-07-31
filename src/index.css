@@ -1,3 +1,11 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Public Sans", Arial, sans-serif;
+}
+
 @variant dark (:where(.dark, .dark *) &);
+
+body {
+  font-family: "Public Sans", Arial, sans-serif;
+}
