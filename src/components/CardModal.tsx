@@ -32,9 +32,17 @@ export const CardModal: React.FC<CardModalProps> = ({
   const [title, setTitle] = useState(card?.title || '');
   const [description, setDescription] = useState(card?.description || '');
   const [areaId, setAreaId] = useState<string | null>(card ? card.areaId : null);
-  const [columnId, setColumnId] = useState<string>(
-    card ? card.columnId : initialColumnId || columns[0]?.id || 'c1'
-  );
+  const getInitialColumnId = (): string => {
+    if (card && columns.some((c) => c.id === card.columnId)) {
+      return card.columnId;
+    }
+    if (initialColumnId && columns.some((c) => c.id === initialColumnId)) {
+      return initialColumnId;
+    }
+    return columns[0]?.id || 'c1';
+  };
+
+  const [columnId, setColumnId] = useState<string>(getInitialColumnId());
   const [dueDate, setDueDate] = useState<string>(card?.dueDate || '');
   const [progress, setProgress] = useState<number>(card ? card.progress : 0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);

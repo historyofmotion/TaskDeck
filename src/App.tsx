@@ -172,6 +172,10 @@ export default function App() {
 
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
+        const validColId = boardData.columns.some((c) => c.id === quickAddColumnId)
+          ? quickAddColumnId
+          : boardData.columns[0]?.id || 'c1';
+        setQuickAddColumnId(validColId);
         setIsNewCardModalOpen(true);
       } else if (e.key === 'd' || e.key === 'D') {
         e.preventDefault();
@@ -306,12 +310,20 @@ export default function App() {
       });
     } else {
       // New card creation
+      const fallbackColId = boardData.columns[0]?.id || 'c1';
+      const finalColumnId =
+        cardData.columnId && boardData.columns.some((c) => c.id === cardData.columnId)
+          ? cardData.columnId
+          : boardData.columns.some((c) => c.id === quickAddColumnId)
+          ? quickAddColumnId
+          : fallbackColId;
+
       const newCard: CardItem = {
         id: `k_${Date.now()}`,
         title: cardData.title || 'Untitled Task',
         description: cardData.description || '',
         areaId: cardData.areaId !== undefined ? cardData.areaId : null,
-        columnId: cardData.columnId || quickAddColumnId,
+        columnId: finalColumnId,
         priority: boardData.cards.length + 1,
         starred: isEditingCardStarred,
         progress: cardData.progress || 0,
