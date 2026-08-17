@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Area, CardItem, Column } from '../types';
-import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban } from 'lucide-react';
+import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
 import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor } from '../utils/helpers';
 
 interface ListViewProps {
@@ -244,6 +244,24 @@ export const ListView: React.FC<ListViewProps> = ({
     }
   };
 
+  const handleMoveToTop = (card: CardItem) => {
+    if (!onDragDropCard) return;
+    const isDone = card.columnId === doneColId;
+    const targetGroup = isDone ? doneCards : activeCards;
+    if (targetGroup.length > 0 && targetGroup[0].id !== card.id) {
+      onDragDropCard(card.id, targetGroup[0].id, true, card.columnId);
+    }
+  };
+
+  const handleMoveToBottom = (card: CardItem) => {
+    if (!onDragDropCard) return;
+    const isDone = card.columnId === doneColId;
+    const targetGroup = isDone ? doneCards : activeCards;
+    if (targetGroup.length > 0 && targetGroup[targetGroup.length - 1].id !== card.id) {
+      onDragDropCard(card.id, targetGroup[targetGroup.length - 1].id, false, card.columnId);
+    }
+  };
+
   return (
     <div className="w-full max-w-[1600px] mx-auto px-4 pb-8">
       {/* List Top Bar Header with Hamburger Menu */}
@@ -364,6 +382,8 @@ export const ListView: React.FC<ListViewProps> = ({
               const isBlocked = column?.name.toLowerCase().includes('blocked');
               const isDone = column?.id === doneColId;
               const isFirstDoneCard = isDone && (index === 0 || visibleCards[index - 1].columnId !== doneColId);
+              const isTop = isDone ? doneCards[0]?.id === card.id : activeCards[0]?.id === card.id;
+              const isBottom = isDone ? doneCards[doneCards.length - 1]?.id === card.id : activeCards[activeCards.length - 1]?.id === card.id;
               const dateInfo = formatDueDateLabel(card.dueDate, isDone);
               const completedInfo = isDone ? formatCompletedAtLabel(card.completedAt) : '';
               const url = extractFirstUrl(card.description || '');
@@ -457,6 +477,38 @@ export const ListView: React.FC<ListViewProps> = ({
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           )}
+
+                          {/* Quick Move Action Buttons (Reveals on Hover) */}
+                          <div
+                            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 flex items-center gap-0.5 ml-1 shrink-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xs p-0.5 rounded-md border border-slate-200/90 dark:border-slate-700/90 shadow-2xs"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveToTop(card);
+                              }}
+                              disabled={isTop}
+                              title="Move to top"
+                              className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                            >
+                              <ArrowUpToLine className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveToBottom(card);
+                              }}
+                              disabled={isBottom}
+                              title="Move to bottom"
+                              className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                            >
+                              <ArrowDownToLine className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         {showDetails && card.description && (
                           <p className={`text-[11px] truncate mt-0.5 ${
