@@ -8,6 +8,10 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
 } from 'lucide-react';
 import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
 import { DescriptionFlyout } from './DescriptionFlyout';
@@ -183,6 +187,38 @@ export const BoardView: React.FC<BoardViewProps> = ({
     }
   };
 
+  const handleMoveToTop = (card: CardItem) => {
+    const colCards = cards
+      .filter((c) => c.columnId === card.columnId)
+      .sort((a, b) => a.priority - b.priority);
+    if (colCards.length > 0 && colCards[0].id !== card.id) {
+      onDragDropCard(card.id, colCards[0].id, true, card.columnId);
+    }
+  };
+
+  const handleMoveToBottom = (card: CardItem) => {
+    const colCards = cards
+      .filter((c) => c.columnId === card.columnId)
+      .sort((a, b) => a.priority - b.priority);
+    if (colCards.length > 0 && colCards[colCards.length - 1].id !== card.id) {
+      onDragDropCard(card.id, colCards[colCards.length - 1].id, false, card.columnId);
+    }
+  };
+
+  const handleMoveLeft = (card: CardItem) => {
+    const colIdx = columns.findIndex((c) => c.id === card.columnId);
+    if (colIdx > 0) {
+      onDragDropCard(card.id, null, false, columns[colIdx - 1].id);
+    }
+  };
+
+  const handleMoveRight = (card: CardItem) => {
+    const colIdx = columns.findIndex((c) => c.id === card.columnId);
+    if (colIdx < columns.length - 1) {
+      onDragDropCard(card.id, null, false, columns[colIdx + 1].id);
+    }
+  };
+
   // Render SVG Progress Donut
   const renderProgressDonut = (pct: number, isDone: boolean) => {
     const val = isDone ? 100 : Math.max(0, Math.min(100, pct));
@@ -231,7 +267,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
       )}
 
       <div className="flex gap-4 items-start min-w-[900px]">
-        {columns.map((column) => {
+        {columns.map((column, columnIndex) => {
           const isDoneCol = doneColumn?.id === column.id;
           const columnCards = cards
             .filter((c) => c.columnId === column.id)
@@ -306,6 +342,68 @@ export const BoardView: React.FC<BoardViewProps> = ({
                             style={{ backgroundColor: area.color }}
                           />
                         )}
+
+                        {/* Quick Move Action Toolbar (Reveals on Hover) */}
+                        <div
+                          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 absolute top-1.5 right-7 z-10 flex items-center gap-0.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xs p-0.5 rounded-lg border border-slate-200/90 dark:border-slate-700/90 shadow-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Move to Top */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveToTop(card);
+                            }}
+                            disabled={cardIndex === 0}
+                            title="Move to top"
+                            className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowUpToLine className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move Left */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveLeft(card);
+                            }}
+                            disabled={columnIndex === 0}
+                            title={columnIndex > 0 ? `Move left to ${columns[columnIndex - 1].name}` : 'No column to left'}
+                            className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move Right */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveRight(card);
+                            }}
+                            disabled={columnIndex === columns.length - 1}
+                            title={columnIndex < columns.length - 1 ? `Move right to ${columns[columnIndex + 1].name}` : 'No column to right'}
+                            className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move to Bottom */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveToBottom(card);
+                            }}
+                            disabled={cardIndex === columnCards.length - 1}
+                            title="Move to bottom"
+                            className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowDownToLine className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
 
                         {/* TOP ROW: Title on left, Star top-right */}
                         <div className="flex items-start justify-between gap-2 mb-1.5 pt-0.5">
