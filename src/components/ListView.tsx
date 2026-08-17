@@ -451,72 +451,78 @@ export const ListView: React.FC<ListViewProps> = ({
                       </div>
 
                       {/* Title & Description (PRIMARY COLUMN) */}
-                      <div className="col-span-5 sm:col-span-4 md:col-span-5 lg:col-span-5 min-w-0 pr-3">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className={`font-semibold truncate ${
-                              isDone
-                                ? 'line-through text-slate-400 dark:text-slate-500 font-normal'
-                                : 'text-slate-900 dark:text-slate-100'
-                            }`}
-                          >
-                            {card.title}
-                          </span>
-                          {url && (
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className={`p-0.5 rounded shrink-0 ${
+                      <div className="col-span-5 sm:col-span-4 md:col-span-5 lg:col-span-5 min-w-0 pr-2 flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className={`font-semibold truncate ${
                                 isDone
-                                  ? 'text-slate-400 dark:text-slate-600 hover:text-indigo-500'
-                                  : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50'
+                                  ? 'line-through text-slate-400 dark:text-slate-500 font-normal'
+                                  : 'text-slate-900 dark:text-slate-100'
                               }`}
                             >
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-
-                          {/* Quick Move Action Buttons (Reveals on Hover) */}
-                          <div
-                            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 flex items-center gap-0.5 ml-1 shrink-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xs p-0.5 rounded-md border border-slate-200/90 dark:border-slate-700/90 shadow-2xs"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoveToTop(card);
-                              }}
-                              disabled={isTop}
-                              title="Move to top"
-                              className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
-                            >
-                              <ArrowUpToLine className="w-3.5 h-3.5" />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoveToBottom(card);
-                              }}
-                              disabled={isBottom}
-                              title="Move to bottom"
-                              className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
-                            >
-                              <ArrowDownToLine className="w-3.5 h-3.5" />
-                            </button>
+                              {card.title}
+                            </span>
+                            {url && (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className={`p-0.5 rounded shrink-0 ${
+                                  isDone
+                                    ? 'text-slate-400 dark:text-slate-600 hover:text-indigo-500'
+                                    : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50'
+                                }`}
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
                           </div>
+                          {showDetails && card.description && (
+                            <p
+                              className={`text-[11px] truncate mt-0.5 ${
+                                isDone
+                                  ? 'text-slate-400 dark:text-slate-600 font-normal'
+                                  : 'text-slate-500 dark:text-slate-400'
+                              }`}
+                            >
+                              {card.description}
+                            </p>
+                          )}
                         </div>
-                        {showDetails && card.description && (
-                          <p className={`text-[11px] truncate mt-0.5 ${
-                            isDone ? 'text-slate-400 dark:text-slate-600 font-normal' : 'text-slate-500 dark:text-slate-400'
-                          }`}>
-                            {card.description}
-                          </p>
-                        )}
+
+                        {/* Quick Move Action Buttons (Right-Justified next to Status Column, Fixed Horizontal Position) */}
+                        <div
+                          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 flex items-center gap-0.5 shrink-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xs p-0.5 rounded-md border border-slate-200/90 dark:border-slate-700/90 shadow-2xs"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveToTop(card);
+                            }}
+                            disabled={isTop}
+                            title="Move to top"
+                            className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowUpToLine className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveToBottom(card);
+                            }}
+                            disabled={isBottom}
+                            title="Move to bottom"
+                            className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowDownToLine className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Status / Column */}
