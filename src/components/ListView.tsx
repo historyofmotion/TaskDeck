@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Area, CardItem, Column } from '../types';
-import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
+import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban, ArrowUpToLine, ArrowDownToLine, ArrowUp, ArrowDown } from 'lucide-react';
 import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor } from '../utils/helpers';
 
 interface ListViewProps {
@@ -253,6 +253,26 @@ export const ListView: React.FC<ListViewProps> = ({
     }
   };
 
+  const handleMoveUpOne = (card: CardItem) => {
+    if (!onDragDropCard) return;
+    const isDone = card.columnId === doneColId;
+    const targetGroup = isDone ? doneCards : activeCards;
+    const cardIdx = targetGroup.findIndex((c) => c.id === card.id);
+    if (cardIdx > 0) {
+      onDragDropCard(card.id, targetGroup[cardIdx - 1].id, true, card.columnId);
+    }
+  };
+
+  const handleMoveDownOne = (card: CardItem) => {
+    if (!onDragDropCard) return;
+    const isDone = card.columnId === doneColId;
+    const targetGroup = isDone ? doneCards : activeCards;
+    const cardIdx = targetGroup.findIndex((c) => c.id === card.id);
+    if (cardIdx !== -1 && cardIdx < targetGroup.length - 1) {
+      onDragDropCard(card.id, targetGroup[cardIdx + 1].id, false, card.columnId);
+    }
+  };
+
   const handleMoveToBottom = (card: CardItem) => {
     if (!onDragDropCard) return;
     const isDone = card.columnId === doneColId;
@@ -497,6 +517,7 @@ export const ListView: React.FC<ListViewProps> = ({
                           className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 flex items-center gap-0.5 shrink-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xs p-0.5 rounded-md border border-slate-200/90 dark:border-slate-700/90 shadow-2xs"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {/* Move to Top */}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -510,6 +531,35 @@ export const ListView: React.FC<ListViewProps> = ({
                             <ArrowUpToLine className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Move Up 1 Line */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveUpOne(card);
+                            }}
+                            disabled={isTop}
+                            title="Move up 1 line (Alt+↑)"
+                            className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move Down 1 Line */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveDownOne(card);
+                            }}
+                            disabled={isBottom}
+                            title="Move down 1 line (Alt+↓)"
+                            className="p-0.5 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move to Bottom */}
                           <button
                             type="button"
                             onClick={(e) => {
