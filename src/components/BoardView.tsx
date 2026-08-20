@@ -170,19 +170,13 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
     if (e.altKey && e.key === 'ArrowLeft') {
       e.preventDefault();
-      const colIdx = columns.findIndex((c) => c.id === card.columnId);
-      if (colIdx > 0) {
-        onDragDropCard(card.id, null, false, columns[colIdx - 1].id);
-      }
+      handleMoveLeft(card);
       return;
     }
 
     if (e.altKey && e.key === 'ArrowRight') {
       e.preventDefault();
-      const colIdx = columns.findIndex((c) => c.id === card.columnId);
-      if (colIdx < columns.length - 1) {
-        onDragDropCard(card.id, null, false, columns[colIdx + 1].id);
-      }
+      handleMoveRight(card);
       return;
     }
   };
@@ -208,14 +202,30 @@ export const BoardView: React.FC<BoardViewProps> = ({
   const handleMoveLeft = (card: CardItem) => {
     const colIdx = columns.findIndex((c) => c.id === card.columnId);
     if (colIdx > 0) {
-      onDragDropCard(card.id, null, false, columns[colIdx - 1].id);
+      const prevColId = columns[colIdx - 1].id;
+      const targetColCards = cards
+        .filter((c) => c.columnId === prevColId)
+        .sort((a, b) => a.priority - b.priority);
+      if (targetColCards.length > 0) {
+        onDragDropCard(card.id, targetColCards[0].id, true, prevColId);
+      } else {
+        onDragDropCard(card.id, null, false, prevColId);
+      }
     }
   };
 
   const handleMoveRight = (card: CardItem) => {
     const colIdx = columns.findIndex((c) => c.id === card.columnId);
     if (colIdx < columns.length - 1) {
-      onDragDropCard(card.id, null, false, columns[colIdx + 1].id);
+      const nextColId = columns[colIdx + 1].id;
+      const targetColCards = cards
+        .filter((c) => c.columnId === nextColId)
+        .sort((a, b) => a.priority - b.priority);
+      if (targetColCards.length > 0) {
+        onDragDropCard(card.id, targetColCards[targetColCards.length - 1].id, false, nextColId);
+      } else {
+        onDragDropCard(card.id, null, false, nextColId);
+      }
     }
   };
 
@@ -370,7 +380,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                               handleMoveLeft(card);
                             }}
                             disabled={columnIndex === 0}
-                            title={columnIndex > 0 ? `Move left to ${columns[columnIndex - 1].name}` : 'No column to left'}
+                            title={columnIndex > 0 ? `Move to top of ${columns[columnIndex - 1].name} (Alt+←)` : 'No column to left'}
                             className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
                           >
                             <ArrowLeft className="w-3.5 h-3.5" />
@@ -384,7 +394,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                               handleMoveRight(card);
                             }}
                             disabled={columnIndex === columns.length - 1}
-                            title={columnIndex < columns.length - 1 ? `Move right to ${columns[columnIndex + 1].name}` : 'No column to right'}
+                            title={columnIndex < columns.length - 1 ? `Move to bottom of ${columns[columnIndex + 1].name} (Alt+→)` : 'No column to right'}
                             className="p-1 rounded text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700/70 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
                           >
                             <ArrowRight className="w-3.5 h-3.5" />
