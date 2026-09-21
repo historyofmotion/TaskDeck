@@ -13,7 +13,7 @@ import {
   ArrowLeft,
   ArrowRight,
 } from 'lucide-react';
-import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
+import { extractUrls, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
 import { DescriptionFlyout } from './DescriptionFlyout';
 
 interface BoardViewProps {
@@ -349,7 +349,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
               >
                 {columnCards.map((card, cardIndex) => {
                   const area = card.areaId ? areaMap.get(card.areaId) : null;
-                  const url = extractFirstUrl(card.description || '');
+                  const urls = extractUrls(card.description || '');
                   const dateInfo = formatDueDateLabel(card.dueDate, isDoneCol);
                   const completedInfo = isDoneCol ? formatCompletedAtLabel(card.completedAt) : '';
                   const isStarred = card.starred;
@@ -534,19 +534,20 @@ export const BoardView: React.FC<BoardViewProps> = ({
                               </span>
                             ) : null}
 
-                            {/* Link Icon */}
-                            {url && (
+                            {/* Link Icons */}
+                            {urls.map((u, i) => (
                               <a
-                                href={url}
+                                key={i}
+                                href={u}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                title={`Open URL: ${url}`}
+                                title={`Open URL: ${u}`}
                                 className="p-0.5 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shrink-0"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>
-                            )}
+                            ))}
                           </div>
 
                           {/* Right Progress Donut */}

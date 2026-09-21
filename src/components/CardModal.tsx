@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Area, CardItem, Column } from '../types';
 import { Star, ExternalLink, Archive, Trash2, X, Calendar, Layers, SlidersHorizontal, Check } from 'lucide-react';
-import { extractFirstUrl } from '../utils/helpers';
+import { extractUrls } from '../utils/helpers';
 import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface CardModalProps {
@@ -79,7 +79,7 @@ export const CardModal: React.FC<CardModalProps> = ({
   const doneColId = columns.find((c) => c.name.toLowerCase() === 'done')?.id;
   const isDoneStatus = columnId === doneColId;
 
-  const urlInDescription = extractFirstUrl(description);
+  const urlsInDescription = extractUrls(description);
 
   // Auto-save on backdrop click / close
   const handleSaveAndClose = () => {
@@ -252,16 +252,22 @@ export const CardModal: React.FC<CardModalProps> = ({
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Description & Links
               </label>
-              {urlInDescription && (
-                <a
-                  href={urlInDescription}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  <span>Open URL</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+              {urlsInDescription.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {urlsInDescription.map((u, i) => (
+                    <a
+                      key={i}
+                      href={u}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={u}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      <span>{urlsInDescription.length > 1 ? `Link ${i + 1}` : 'Open URL'}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ))}
+                </div>
               )}
             </div>
             <textarea

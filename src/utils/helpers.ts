@@ -3,10 +3,17 @@ import { BoardData, CardItem, Column } from '../types';
 // URL regex to detect http/https links
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
 
+export function extractUrls(text: string): string[] {
+  if (!text) return [];
+  const matches = text.match(URL_REGEX);
+  if (!matches) return [];
+  const cleaned = matches.map((u) => u.replace(/[.,;:)]+$/, ''));
+  return Array.from(new Set(cleaned)).filter(Boolean);
+}
+
 export function extractFirstUrl(text: string): string | null {
-  if (!text) return null;
-  const match = text.match(URL_REGEX);
-  return match ? match[0] : null;
+  const urls = extractUrls(text);
+  return urls.length > 0 ? urls[0] : null;
 }
 
 export function replaceUrlsWithLinkToken(text: string): string {
