@@ -1,7 +1,7 @@
 import React from 'react';
 import { CardItem } from '../types';
 import { Archive, RotateCcw, Trash2, X, ExternalLink } from 'lucide-react';
-import { extractFirstUrl } from '../utils/helpers';
+import { extractUrls } from '../utils/helpers';
 import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface ArchivedCardModalProps {
@@ -19,7 +19,7 @@ export const ArchivedCardModal: React.FC<ArchivedCardModalProps> = ({
 }) => {
   const modalRef = useModalAccessibility(true, onClose);
   const backdropMouseDownRef = React.useRef<EventTarget | null>(null);
-  const urlInDescription = extractFirstUrl(card.description || '');
+  const urlsInDescription = extractUrls(card.description || '');
 
   const handleBackdropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     backdropMouseDownRef.current = e.target;
@@ -82,17 +82,18 @@ export const ArchivedCardModal: React.FC<ArchivedCardModalProps> = ({
             <p className="text-xs text-slate-400 italic">No description provided.</p>
           )}
 
-          {urlInDescription && (
+          {urlsInDescription.map((u, i) => (
             <a
-              href={urlInDescription}
+              key={i}
+              href={u}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium break-all"
             >
-              <span>{urlInDescription}</span>
-              <ExternalLink className="w-3 h-3" />
+              <span>{u}</span>
+              <ExternalLink className="w-3 h-3 shrink-0" />
             </a>
-          )}
+          ))}
 
           {card.archivedAt && (
             <p className="text-[11px] text-slate-400">

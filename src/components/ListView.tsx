@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Area, CardItem, Column } from '../types';
 import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban, ArrowUpToLine, ArrowDownToLine, ArrowUp, ArrowDown } from 'lucide-react';
-import { extractFirstUrl, formatCompletedAtLabel, formatDueDateLabel, getContrastColor } from '../utils/helpers';
+import { extractUrls, formatCompletedAtLabel, formatDueDateLabel, getContrastColor } from '../utils/helpers';
 
 interface ListViewProps {
   cards: CardItem[];
@@ -406,7 +406,7 @@ export const ListView: React.FC<ListViewProps> = ({
               const isBottom = isDone ? doneCards[doneCards.length - 1]?.id === card.id : activeCards[activeCards.length - 1]?.id === card.id;
               const dateInfo = formatDueDateLabel(card.dueDate, isDone);
               const completedInfo = isDone ? formatCompletedAtLabel(card.completedAt) : '';
-              const url = extractFirstUrl(card.description || '');
+              const urls = extractUrls(card.description || '');
               const isDropTarget = dragOverCardId === card.id;
 
               return (
@@ -483,12 +483,14 @@ export const ListView: React.FC<ListViewProps> = ({
                             >
                               {card.title}
                             </span>
-                            {url && (
+                            {urls.map((u, i) => (
                               <a
-                                href={url}
+                                key={i}
+                                href={u}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
+                                title={`Open URL: ${u}`}
                                 className={`p-0.5 rounded shrink-0 ${
                                   isDone
                                     ? 'text-slate-400 dark:text-slate-600 hover:text-indigo-500'
@@ -497,7 +499,7 @@ export const ListView: React.FC<ListViewProps> = ({
                               >
                                 <ExternalLink className="w-3 h-3" />
                               </a>
-                            )}
+                            ))}
                           </div>
                           {showDetails && card.description && (
                             <p
