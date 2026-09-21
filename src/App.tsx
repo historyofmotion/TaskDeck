@@ -441,6 +441,12 @@ export default function App() {
     placeBefore: boolean,
     targetColumnId: string
   ) => {
+    const draggedCard = boardData.cards.find((c) => c.id === draggedCardId);
+    if (!targetCardId && draggedCard && draggedCard.columnId === targetColumnId) {
+      // Dragged and dropped onto the same column container without a target card -> do nothing
+      return;
+    }
+
     const doneColId = boardData.columns.find((c) => c.name.toLowerCase() === 'done')?.id || 'c4';
 
     let updatedCards: CardItem[];

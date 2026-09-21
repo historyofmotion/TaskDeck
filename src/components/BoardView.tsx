@@ -91,6 +91,16 @@ export const BoardView: React.FC<BoardViewProps> = ({
   const handleDragOverColumn = (e: React.DragEvent, columnId: string) => {
     e.preventDefault();
     if (!draggedCardId) return;
+
+    // Do not highlight column if dragged card is already in this column
+    const draggedCard = cards.find((c) => c.id === draggedCardId);
+    if (draggedCard && draggedCard.columnId === columnId) {
+      if (dragOverColumnId === columnId) {
+        setDragOverColumnId(null);
+      }
+      return;
+    }
+
     setDragOverColumnId(columnId);
   };
 
@@ -119,7 +129,16 @@ export const BoardView: React.FC<BoardViewProps> = ({
     const cardId = draggedCardId || e.dataTransfer.getData('text/plain');
     if (!cardId) return;
 
-    // Drop on column container directly sets target card to null
+    const draggedCard = cards.find((c) => c.id === cardId);
+    // If dropped on the same column container without targeting a specific card, do not move to bottom
+    if (draggedCard && draggedCard.columnId === targetColumnId) {
+      setDraggedCardId(null);
+      setDragOverCardId(null);
+      setDragOverColumnId(null);
+      return;
+    }
+
+    // Drop on another column container moves card to that column
     onDragDropCard(
       cardId,
       null,
@@ -288,16 +307,30 @@ export const BoardView: React.FC<BoardViewProps> = ({
               key={column.id}
               role="region"
               aria-label={`${column.name} column, ${columnCards.length} tasks`}
-              onDragOver={(e) => handleDragOverColumn(e, column.id)}
-              onDrop={(e) => handleDropOnColumn(e, column.id)}
               className={`flex-1 min-w-[260px] max-w-[360px] bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border transition-all flex flex-col ${
                 dragOverColumnId === column.id && !dragOverCardId
                   ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/20'
                   : 'border-slate-200/80 dark:border-slate-800'
               }`}
             >
-              {/* Column Header */}
-              <div className="flex items-center justify-between p-3 border-b border-slate-200/80 dark:border-slate-800">
+              {/* Column Header - NOT a drop target */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragOverColumnId) {
+                    setDragOverColumnId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDraggedCardId(null);
+                  setDragOverCardId(null);
+                  setDragOverColumnId(null);
+                }}
+                className="flex items-center justify-between p-3 border-b border-slate-200/80 dark:border-slate-800 select-none"
+              >
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-xs text-slate-800 dark:text-slate-200 tracking-tight">
                     {column.name}
@@ -308,8 +341,12 @@ export const BoardView: React.FC<BoardViewProps> = ({
                 </div>
               </div>
 
-              {/* Column Cards Container */}
-              <div className="p-2 space-y-2.5 flex-1 min-h-[120px]">
+              {/* Column Cards Container - Drop zone for cards */}
+              <div
+                onDragOver={(e) => handleDragOverColumn(e, column.id)}
+                onDrop={(e) => handleDropOnColumn(e, column.id)}
+                className="p-2 space-y-2.5 flex-1 min-h-[120px]"
+              >
                 {columnCards.map((card, cardIndex) => {
                   const area = card.areaId ? areaMap.get(card.areaId) : null;
                   const url = extractFirstUrl(card.description || '');
