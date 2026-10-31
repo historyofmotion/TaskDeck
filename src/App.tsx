@@ -55,6 +55,12 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
 
+  // If the filtered project no longer exists (deleted, or a file/import without it), show all projects
+  useEffect(() => {
+    if (selectedAreaId === 'ALL' || selectedAreaId === 'NO_AREA') return;
+    if (!boardData.areas.some((a) => a.id === selectedAreaId)) setSelectedAreaId('ALL');
+  }, [boardData.areas, selectedAreaId]);
+
   // Modals state
   const [editingCard, setEditingCard] = useState<CardItem | null>(null);
   const [isNewCardModalOpen, setIsNewCardModalOpen] = useState<boolean>(false);
@@ -692,15 +698,21 @@ export default function App() {
       c.areaId === deletedAreaId ? { ...c, areaId: reassignAreaId } : c
     );
 
+    // Archived cards follow the same choice, so none point to a missing project
+    const updatedArchive = boardData.archive.map((c) =>
+      c.areaId === deletedAreaId ? { ...c, areaId: reassignAreaId } : c
+    );
+
     const updatedAreas = boardData.areas.filter((a) => a.id !== deletedAreaId);
 
     updateBoardData({
       ...boardData,
       areas: updatedAreas,
       cards: updatedCards,
+      archive: updatedArchive,
     });
 
-    addToast('Area deleted.', 'info');
+    addToast('Project deleted.', 'info');
   };
 
   return (

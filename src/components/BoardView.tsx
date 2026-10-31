@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Area, CardItem, Column } from '../types';
 import {
   Star,
@@ -91,8 +91,32 @@ export const BoardView: React.FC<BoardViewProps> = ({
   };
 
   // Drag handlers
+  // Idle hover: if the mouse rests on a card for 15 s without moving, the card wiggles once
+  const IDLE_WIGGLE_MS = 15000;
+  const [wigglingCardId, setWigglingCardId] = useState<string | null>(null);
+  const idleTimer = useRef<number | null>(null);
+
+  const stopIdleTimer = () => {
+    if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    idleTimer.current = null;
+  };
+
+  const startIdleTimer = (cardId: string) => {
+    stopIdleTimer();
+    idleTimer.current = window.setTimeout(() => {
+      idleTimer.current = null;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const dialogOpen = !!document.querySelector('[role="dialog"]');
+      if (reducedMotion || dialogOpen || document.hidden) return;
+      setWigglingCardId(cardId);
+    }, IDLE_WIGGLE_MS);
+  };
+
+  useEffect(() => stopIdleTimer, []);
+
   const handleDragStart = (e: React.DragEvent, cardId: string) => {
     e.dataTransfer.setData('text/plain', cardId);
+    stopIdleTimer();
     setDraggedCardId(cardId);
   };
 
@@ -427,11 +451,22 @@ export const BoardView: React.FC<BoardViewProps> = ({
                         onDragOver={(e) => handleDragOverCard(e, card)}
                         onDrop={(e) => handleDropOnCard(e, card)}
                         onDragEnd={handleDragEnd}
-                        onClick={() => onOpenCardModal(card)}
+                        onClick={() => {
+                          stopIdleTimer();
+                          onOpenCardModal(card);
+                        }}
                         onKeyDown={(e) => handleCardKeyDown(e, card)}
+                        onMouseEnter={() => startIdleTimer(card.id)}
+                        onMouseMove={() => startIdleTimer(card.id)}
+                        onMouseLeave={stopIdleTimer}
+                        onAnimationEnd={(e) => {
+                          if (e.animationName !== 'card-idle-wiggle') return;
+                          setWigglingCardId(null);
+                          startIdleTimer(card.id); // still resting here: wiggle again after another 15 s
+                        }}
                         className={`group relative ${isZoomed ? 'h-full flex flex-col' : ''} bg-white dark:bg-slate-800/90 rounded-xl shadow-2xs hover:shadow-md border transition-all cursor-pointer overflow-hidden p-3 pl-4 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
                           draggedCardId === card.id ? 'opacity-40 scale-98' : ''
-                        } ${
+                        } ${wigglingCardId === card.id ? 'card-idle-wiggle' : ''} ${
                           isStarred
                             ? 'border-amber-300 dark:border-amber-600/80 ring-1 ring-amber-400/40'
                             : 'border-slate-200/90 dark:border-slate-700/80'
