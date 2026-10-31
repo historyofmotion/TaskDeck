@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Area,
   BoardData,
@@ -18,6 +18,11 @@ import {
   createBoardFile,
   setActiveFileHandle,
   flushPendingSave,
+  ensureFilePermission,
+  readBoardFile,
+  getLocalSavedAt,
+  normalizeBoardData,
+  BoardFileContents,
 } from './utils/storage';
 import {
   generatePlainTextCopy,
@@ -26,6 +31,9 @@ import {
   reorderCardsInGlobalSequence,
   resortWithStarredTop,
   runAutoArchive,
+  getDoneColumnId,
+  diffBoards,
+  BoardDiff,
 } from './utils/helpers';
 import { updateBrowserFavicon } from './utils/appIconUtils';
 import { TopBar } from './components/TopBar';
@@ -36,6 +44,7 @@ import { CardModal } from './components/CardModal';
 import { ArchivedCardModal } from './components/ArchivedCardModal';
 import { OptionsModal } from './components/OptionsModal';
 import { StarLimitModal } from './components/StarLimitModal';
+import { FileSyncModal } from './components/FileSyncModal';
 import { Toast } from './components/Toast';
 import { HelpModal } from './components/HelpModal';
 
@@ -63,6 +72,15 @@ export default function App() {
 
   // File connection name
   const [connectedFileName, setConnectedFileName] = useState<string | null>(null);
+  // A board.json that differs from the browser copy, waiting for the user to choose
+  const [pendingFileSync, setPendingFileSync] = useState<
+    (BoardFileContents & { diff: BoardDiff; browserSavedAt: number }) | null
+  >(null);
+  // A remembered board.json that needs a click before the browser lets us read it
+  const [fileNeedingAccess, setFileNeedingAccess] = useState<FileSystemFileHandle | null>(null);
+  // Latest board, for async file code that runs after later edits
+  const boardDataRef = useRef(boardData);
+  boardDataRef.current = boardData;
 
   // Toast messages
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -92,10 +110,13 @@ export default function App() {
 
   // Attempt to restore file handle on boot and flush saves on window exit
   useEffect(() => {
-    getStoredFileHandle().then((handle) => {
-      if (handle) {
-        setActiveFileHandle(handle);
-        setConnectedFileName(handle.name);
+    // Don't write to the remembered file until it has been compared with the browser copy
+    getStoredFileHandle().then(async (handle) => {
+      if (!handle) return;
+      if (await ensureFilePermission(handle, false)) {
+        loadAndCompareFile(handle);
+      } else {
+        setFileNeedingAccess(handle);
       }
     });
 
@@ -106,6 +127,65 @@ export default function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
+
+  // ---- board.json sync ----
+  const connectFile = (handle: FileSystemFileHandle) => {
+    setActiveFileHandle(handle);
+    setConnectedFileName(handle.name);
+  };
+
+  // Compare a file with the browser copy. Same → connect. Different → ask the user.
+  function compareWithFile(contents: BoardFileContents, announce: boolean) {
+    const diff = diffBoards(boardDataRef.current, contents.data);
+    if (diff.identical) {
+      connectFile(contents.handle);
+      if (announce) addToast(`Connected to file: ${contents.handle.name}`, 'success');
+      return;
+    }
+    setPendingFileSync({ ...contents, diff, browserSavedAt: getLocalSavedAt() });
+  }
+
+  async function loadAndCompareFile(handle: FileSystemFileHandle) {
+    try {
+      compareWithFile(await readBoardFile(handle), false);
+    } catch (err) {
+      console.error('Could not read board file:', err);
+      addToast(`Couldn't read ${handle.name}. It is not connected; your browser copy is unchanged.`, 'error');
+    }
+  }
+
+  const handleGrantFileAccess = async () => {
+    const handle = fileNeedingAccess;
+    if (!handle) return;
+    setFileNeedingAccess(null);
+    if (await ensureFilePermission(handle, true)) {
+      loadAndCompareFile(handle);
+    } else {
+      addToast(`No access to ${handle.name}. Changes are only saved in this browser.`, 'warning');
+    }
+  };
+
+  const handleUseFile = () => {
+    if (!pendingFileSync) return;
+    connectFile(pendingFileSync.handle);
+    updateBoardData(pendingFileSync.data);
+    addToast(`Loaded board from ${pendingFileSync.handle.name}`, 'success');
+    setPendingFileSync(null);
+  };
+
+  const handleKeepBrowser = () => {
+    if (!pendingFileSync) return;
+    connectFile(pendingFileSync.handle);
+    debouncedSave(boardDataRef.current); // overwrites the file with the browser copy
+    addToast(`Kept browser copy and saved it to ${pendingFileSync.handle.name}`, 'success');
+    setPendingFileSync(null);
+  };
+
+  const handleDecideLater = () => {
+    if (!pendingFileSync) return;
+    addToast(`${pendingFileSync.handle.name} not connected. Changes are only saved in this browser for now.`, 'info');
+    setPendingFileSync(null);
+  };
 
   // Theme application with live system listener support
   useEffect(() => {
@@ -166,7 +246,7 @@ export default function App() {
           activeEl.getAttribute('contenteditable') === 'true');
 
       if (isInput) return;
-      if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard) {
+      if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync) {
         return;
       }
 
@@ -191,7 +271,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingCard, isNewCardModalOpen, viewingArchivedCard, isOptionsOpen, isHelpOpen, pendingStarCard]);
+  }, [editingCard, isNewCardModalOpen, viewingArchivedCard, isOptionsOpen, isHelpOpen, pendingStarCard, pendingFileSync]);
 
   // Copy board state to clipboard
   const handleCopyBoard = () => {
@@ -209,8 +289,7 @@ export default function App() {
   // Filtered Cards logic
   const areaMap = useMemo(() => new Map(boardData.areas.map((a) => [a.id, a])), [boardData.areas]);
 
-  const filteredCards = useMemo(() => {
-    return boardData.cards.filter((card) => {
+  const matchesFilters = useCallback((card: CardItem) => {
       // Area filter
       if (selectedAreaId === 'NO_AREA' && card.areaId !== null) return false;
       if (selectedAreaId !== 'ALL' && selectedAreaId !== 'NO_AREA' && card.areaId !== selectedAreaId) {
@@ -228,8 +307,18 @@ export default function App() {
       }
 
       return true;
-    });
-  }, [boardData.cards, selectedAreaId, searchQuery, areaMap]);
+  }, [selectedAreaId, searchQuery, areaMap]);
+
+  const filteredCards = useMemo(() => boardData.cards.filter(matchesFilters), [boardData.cards, matchesFilters]);
+
+  // Archived cards matching the same filters, most recently archived first
+  const filteredArchive = useMemo(
+    () =>
+      (boardData.archive || [])
+        .filter(matchesFilters)
+        .sort((a, b) => (b.archivedAt || '').localeCompare(a.archivedAt || '')),
+    [boardData.archive, matchesFilters]
+  );
 
   // Star logic & max 3 limit
   const starredCards = useMemo(() => boardData.cards.filter((c) => c.starred), [boardData.cards]);
@@ -403,7 +492,7 @@ export default function App() {
 
     const remainingArchive = boardData.archive.filter((c) => c.id !== cardId);
     const doneColId =
-      boardData.columns.find((c) => c.name.toLowerCase() === 'done')?.id ||
+      getDoneColumnId(boardData.columns) ||
       boardData.columns[boardData.columns.length - 1]?.id ||
       'c4';
 
@@ -447,7 +536,7 @@ export default function App() {
       return;
     }
 
-    const doneColId = boardData.columns.find((c) => c.name.toLowerCase() === 'done')?.id || 'c4';
+    const doneColId = getDoneColumnId(boardData.columns);
 
     let updatedCards: CardItem[];
     if (targetCardId) {
@@ -463,7 +552,7 @@ export default function App() {
         boardData.cards,
         draggedCardId,
         targetColumnId,
-        doneColId
+        doneColId ?? ''
       );
     }
 
@@ -496,11 +585,11 @@ export default function App() {
 
   // File Options Handlers
   const handleConnectFile = async () => {
-    const result = await pickBoardFile();
-    if (result) {
-      setBoardData(result.data);
-      setConnectedFileName(result.handle.name);
-      addToast(`Connected to file: ${result.handle.name}`, 'success');
+    try {
+      const contents = await pickBoardFile();
+      if (contents) compareWithFile(contents, true);
+    } catch {
+      addToast('That file could not be read as a TaskDeck board.', 'error');
     }
   };
 
@@ -520,7 +609,7 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const imported = JSON.parse(text) as BoardData;
+        const imported = normalizeBoardData(JSON.parse(text) as Partial<BoardData>);
         updateBoardData(imported);
         addToast('Board data imported successfully!', 'success');
       } catch {
@@ -613,6 +702,27 @@ export default function App() {
       />
 
       {/* Action Line Focus Banner */}
+      {fileNeedingAccess && (
+        <div className="mx-4 mt-2 flex items-center gap-3 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-900 dark:text-amber-200">
+          <span className="flex-1">
+            <strong>{fileNeedingAccess.name}</strong> isn't syncing yet. Your browser needs permission to read it,
+            then you'll see whether it matches this board.
+          </span>
+          <button
+            onClick={handleGrantFileAccess}
+            className="px-3 py-1 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-medium shrink-0"
+          >
+            Check file
+          </button>
+          <button
+            onClick={() => setFileNeedingAccess(null)}
+            className="px-2 py-1 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/50 shrink-0"
+          >
+            Not now
+          </button>
+        </div>
+      )}
+
       <ActionLine
         cards={boardData.cards}
         columns={boardData.columns}
@@ -629,7 +739,7 @@ export default function App() {
             columns={boardData.columns}
             cards={filteredCards}
             areas={boardData.areas}
-            archiveCards={boardData.archive || []}
+            archiveCards={filteredArchive}
             showDetails={showDetails}
             onOpenCardModal={setEditingCard}
             onQuickAddCard={handleQuickAddCard}
@@ -648,6 +758,8 @@ export default function App() {
             onDragDropCard={handleDragDropCard}
             onToggleStarAttempt={handleToggleStarAttempt}
             onReorderAllCards={handleReorderAllCards}
+            archiveCards={filteredArchive}
+            onOpenArchivedCard={setViewingArchivedCard}
           />
         )}
       </main>
@@ -706,6 +818,18 @@ export default function App() {
       )}
 
       {/* Star Limit Confirmation Modal */}
+      {pendingFileSync && (
+        <FileSyncModal
+          fileName={pendingFileSync.handle.name}
+          fileModified={pendingFileSync.lastModified}
+          browserSavedAt={pendingFileSync.browserSavedAt}
+          diff={pendingFileSync.diff}
+          onUseFile={handleUseFile}
+          onKeepBrowser={handleKeepBrowser}
+          onDecideLater={handleDecideLater}
+        />
+      )}
+
       {pendingStarCard && lowestStarredCard && (
         <StarLimitModal
           newCardTitle={pendingStarCard.title}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "taskdeck-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port=3123", "--host=127.0.0.1"],
+      "port": 3123
+    }
+  ]
+}

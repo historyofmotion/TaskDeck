@@ -1,7 +1,7 @@
 import React from 'react';
 import { CardItem, Column } from '../types';
 import { AlertCircle, Calendar, ArrowRightCircle, CheckCircle2 } from 'lucide-react';
-import { formatDueDateLabel } from '../utils/helpers';
+import { formatDueDateLabel, getColumnRole } from '../utils/helpers';
 
 interface ActionLineProps {
   cards: CardItem[];
@@ -10,8 +10,8 @@ interface ActionLineProps {
 }
 
 export const ActionLine: React.FC<ActionLineProps> = ({ cards, columns, onOpenCard }) => {
-  const doneColId = columns.find((c) => c.name.toLowerCase() === 'done')?.id;
-  const blockedColId = columns.find((c) => c.name.toLowerCase() === 'blocked')?.id;
+  const doneColId = columns.find((c) => getColumnRole(c) === 'done')?.id;
+  const blockedColId = columns.find((c) => getColumnRole(c) === 'blocked')?.id;
 
   const activeCards = cards.filter((c) => c.columnId !== doneColId);
 
