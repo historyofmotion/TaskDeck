@@ -1,6 +1,6 @@
 import React from 'react';
 import { CardItem, Column } from '../types';
-import { AlertCircle, Calendar, ArrowRightCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Calendar, ArrowRightCircle, CheckCircle2, Star } from 'lucide-react';
 import { formatDueDateLabel, getColumnRole } from '../utils/helpers';
 
 interface ActionLineProps {
@@ -27,6 +27,9 @@ export const ActionLine: React.FC<ActionLineProps> = ({ cards, columns, onOpenCa
     .filter((c) => c.dueDate)
     .sort((a, b) => (a.dueDate! > b.dueDate! ? 1 : -1));
   const nextDueCard = cardsWithDueDate.length > 0 ? cardsWithDueDate[0] : null;
+
+  // Starred cards (max 3), pinned to the Focus bar in rank order. Finished ones are left out.
+  const starredCards = activeCards.filter((c) => c.starred).sort((a, b) => a.priority - b.priority);
 
   // Next up card: lowest priority rank among actionable cards (not done and not blocked)
   const actionableCards = activeCards
@@ -58,6 +61,19 @@ export const ActionLine: React.FC<ActionLineProps> = ({ cards, columns, onOpenCa
             <span>All clear</span>
           </div>
         )}
+
+        {/* Starred chips */}
+        {starredCards.map((card) => (
+          <button
+            key={card.id}
+            onClick={() => onOpenCard(card.id)}
+            title={`Starred: #${card.priority} ${card.title}`}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-200/80 dark:border-amber-800/50 hover:border-amber-400 dark:hover:border-amber-600 transition-colors cursor-pointer max-w-[220px]"
+          >
+            <Star className="w-3.5 h-3.5 shrink-0 fill-amber-400 text-amber-500" />
+            <span className="truncate">{card.title}</span>
+          </button>
+        ))}
 
         {/* Next Due chip */}
         {nextDueCard && (

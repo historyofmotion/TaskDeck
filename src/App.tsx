@@ -21,7 +21,6 @@ import {
   ensureFilePermission,
   readBoardFile,
   getLocalSavedAt,
-  normalizeBoardData,
   BoardFileContents,
 } from './utils/storage';
 import {
@@ -45,6 +44,7 @@ import { ArchivedCardModal } from './components/ArchivedCardModal';
 import { OptionsModal } from './components/OptionsModal';
 import { StarLimitModal } from './components/StarLimitModal';
 import { FileSyncModal } from './components/FileSyncModal';
+import { BoardCheckError, parseBoardFile, summarizeProblems } from './utils/boardCheck';
 import { Toast } from './components/Toast';
 import { HelpModal } from './components/HelpModal';
 
@@ -129,6 +129,16 @@ export default function App() {
   }, []);
 
   // ---- board.json sync ----
+  const describeFileError = (err: unknown) =>
+    err instanceof BoardCheckError ? summarizeProblems(err.problems) : 'it could not be read';
+
+  // Tell the user about small problems that were repaired in a loaded file
+  const reportFixes = (fileName: string, fixes: string[]) => {
+    if (fixes.length === 0) return;
+    console.info(`Fixed while loading ${fileName}:`, fixes);
+    addToast(`Fixed in ${fileName}: ${fixes.join('; ')}`, 'warning');
+  };
+
   const connectFile = (handle: FileSystemFileHandle) => {
     setActiveFileHandle(handle);
     setConnectedFileName(handle.name);
@@ -136,6 +146,7 @@ export default function App() {
 
   // Compare a file with the browser copy. Same → connect. Different → ask the user.
   function compareWithFile(contents: BoardFileContents, announce: boolean) {
+    reportFixes(contents.handle.name, contents.fixes);
     const diff = diffBoards(boardDataRef.current, contents.data);
     if (diff.identical) {
       connectFile(contents.handle);
@@ -150,7 +161,7 @@ export default function App() {
       compareWithFile(await readBoardFile(handle), false);
     } catch (err) {
       console.error('Could not read board file:', err);
-      addToast(`Couldn't read ${handle.name}. It is not connected; your browser copy is unchanged.`, 'error');
+      addToast(`${handle.name} not connected: ${describeFileError(err)}. Your board is unchanged.`, 'error');
     }
   }
 
@@ -271,7 +282,17 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingCard, isNewCardModalOpen, viewingArchivedCard, isOptionsOpen, isHelpOpen, pendingStarCard, pendingFileSync]);
+  }, [
+    editingCard,
+    isNewCardModalOpen,
+    viewingArchivedCard,
+    isOptionsOpen,
+    isHelpOpen,
+    pendingStarCard,
+    pendingFileSync,
+    boardData.columns, // N picks a column, so it needs the current list
+    quickAddColumnId,
+  ]);
 
   // Copy board state to clipboard
   const handleCopyBoard = () => {
@@ -575,12 +596,17 @@ export default function App() {
   };
 
   // Reorder all cards (e.g. from List View menu)
-  const handleReorderAllCards = (newCards: CardItem[]) => {
+  const handleReorderAllCards = (newCards: CardItem[], mode: 'status' | 'project') => {
     updateBoardData({
       ...boardData,
       cards: newCards,
     });
-    addToast('Renumbered tasks: In Progress → Blocked → Pending → Done', 'success');
+    addToast(
+      mode === 'project'
+        ? 'Renumbered: starred first, then each project in Options order (Active → Blocked → Pending), Done last'
+        : 'Renumbered: starred first, then Active & Blocked → Pending → Done',
+      'success'
+    );
   };
 
   // File Options Handlers
@@ -588,8 +614,8 @@ export default function App() {
     try {
       const contents = await pickBoardFile();
       if (contents) compareWithFile(contents, true);
-    } catch {
-      addToast('That file could not be read as a TaskDeck board.', 'error');
+    } catch (err) {
+      addToast(`File not connected: ${describeFileError(err)}`, 'error');
     }
   };
 
@@ -609,11 +635,12 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const imported = normalizeBoardData(JSON.parse(text) as Partial<BoardData>);
-        updateBoardData(imported);
+        const { data, fixes } = parseBoardFile(text);
+        updateBoardData(data); // also saves to localStorage
         addToast('Board data imported successfully!', 'success');
-      } catch {
-        addToast('Invalid JSON board file format.', 'error');
+        reportFixes(file.name, fixes);
+      } catch (err) {
+        addToast(`Import cancelled, your board is unchanged: ${describeFileError(err)}`, 'error');
       }
     };
     reader.readAsText(file);

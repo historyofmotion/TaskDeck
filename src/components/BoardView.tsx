@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Area, CardItem, Column } from '../types';
 import {
   Star,
@@ -12,8 +12,11 @@ import {
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
-import { extractUrls, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { extractUrls, getColumnRole, formatFullDate, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
 import { DescriptionFlyout } from './DescriptionFlyout';
 
 interface BoardViewProps {
@@ -50,6 +53,25 @@ export const BoardView: React.FC<BoardViewProps> = ({
   const [flyoutCard, setFlyoutCard] = useState<CardItem | null>(null);
   const [isArchiveOpen, setIsArchiveOpen] = useState<boolean>(false);
 
+  // Zoom mode: one column fills the board and its cards flow in a grid
+  const [zoomedColumnId, setZoomedColumnId] = useState<string | null>(null);
+  const zoomedColumn = columns.find((c) => c.id === zoomedColumnId) || null;
+  const visibleColumns = zoomedColumn ? [zoomedColumn] : columns;
+
+  // Escape leaves zoom mode (unless a dialog is open or the user is typing)
+  useEffect(() => {
+    if (!zoomedColumn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
+      setZoomedColumnId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomedColumn]);
+
   // Drag and drop state
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
@@ -57,7 +79,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
 
   const areaMap = new Map<string, Area>(areas.map((a) => [a.id, a]));
-  const doneColumn = columns.find((c) => c.name.toLowerCase() === 'done');
+  const doneColumn = columns.find((c) => getColumnRole(c) === 'done');
 
   // Quick add submit
   const handleQuickAddSubmit = (columnId: string) => {
@@ -79,9 +101,11 @@ export const BoardView: React.FC<BoardViewProps> = ({
     e.stopPropagation();
     if (!draggedCardId || draggedCardId === targetCard.id) return;
 
+    // In zoom mode cards flow left to right, so use the horizontal half
     const rect = e.currentTarget.getBoundingClientRect();
-    const offsetY = e.clientY - rect.top;
-    const isBefore = offsetY < rect.height / 2;
+    const isBefore = zoomedColumn
+      ? e.clientX - rect.left < rect.width / 2
+      : e.clientY - rect.top < rect.height / 2;
 
     setDragOverCardId(targetCard.id);
     setDropPosition(isBefore ? 'before' : 'after');
@@ -295,26 +319,37 @@ export const BoardView: React.FC<BoardViewProps> = ({
         />
       )}
 
+      {/* Spring used for the zoom: the column grows, others fade, cards glide */}
+      <MotionConfig reducedMotion="user" transition={{ type: 'spring', stiffness: 380, damping: 38 }}>
       <div className="flex gap-4 items-start min-w-[900px]">
-        {columns.map((column, columnIndex) => {
+        <AnimatePresence mode="popLayout" initial={false}>
+        {visibleColumns.map((column) => {
+          const columnIndex = columns.findIndex((c) => c.id === column.id);
+          const isZoomed = zoomedColumn?.id === column.id;
           const isDoneCol = doneColumn?.id === column.id;
           const columnCards = cards
             .filter((c) => c.columnId === column.id)
             .sort((a, b) => a.priority - b.priority);
 
           return (
-            <div
+            <motion.div
               key={column.id}
+              layout
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              style={{ borderRadius: 12 }}
               role="region"
               aria-label={`${column.name} column, ${columnCards.length} tasks`}
-              className={`flex-1 min-w-[260px] max-w-[360px] bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border transition-all flex flex-col ${
+              className={`flex-1 ${isZoomed ? 'w-full' : 'min-w-[260px] max-w-[360px]'} bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border transition-colors flex flex-col ${
                 dragOverColumnId === column.id && !dragOverCardId
                   ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/20'
                   : 'border-slate-200/80 dark:border-slate-800'
               }`}
             >
               {/* Column Header - NOT a drop target */}
-              <div
+              <motion.div
+                layout="position"
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -329,6 +364,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
                   setDragOverCardId(null);
                   setDragOverColumnId(null);
                 }}
+                onDoubleClick={() => setZoomedColumnId(isZoomed ? null : column.id)}
+                title={isZoomed ? 'Double-click to show all columns' : `Double-click to zoom in on ${column.name}`}
                 className="flex items-center justify-between p-3 border-b border-slate-200/80 dark:border-slate-800 select-none"
               >
                 <div className="flex items-center gap-2">
@@ -339,13 +376,27 @@ export const BoardView: React.FC<BoardViewProps> = ({
                     {columnCards.length}
                   </span>
                 </div>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => setZoomedColumnId(isZoomed ? null : column.id)}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  title={isZoomed ? 'Back to all columns (Esc)' : `Zoom in on ${column.name}`}
+                  aria-label={isZoomed ? 'Back to all columns' : `Zoom in on ${column.name}`}
+                  className="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {isZoomed ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                </button>
+              </motion.div>
 
               {/* Column Cards Container - Drop zone for cards */}
               <div
                 onDragOver={(e) => handleDragOverColumn(e, column.id)}
                 onDrop={(e) => handleDropOnColumn(e, column.id)}
-                className="p-2 space-y-2.5 flex-1 min-h-[120px]"
+                className={`flex-1 min-h-[120px] ${
+                  isZoomed
+                    ? 'p-3 grid gap-3 content-start grid-cols-[repeat(auto-fill,minmax(240px,1fr))]'
+                    : 'p-2 space-y-2.5'
+                }`}
               >
                 {columnCards.map((card, cardIndex) => {
                   const area = card.areaId ? areaMap.get(card.areaId) : null;
@@ -356,10 +407,14 @@ export const BoardView: React.FC<BoardViewProps> = ({
                   const isDropTarget = dragOverCardId === card.id;
 
                   return (
-                    <div key={card.id} className="relative">
+                    <motion.div layout="position" key={card.id} className={`relative ${isZoomed ? 'h-full' : ''}`}>
                       {/* Insertion Indicator Line (Before) */}
                       {isDropTarget && dropPosition === 'before' && (
-                        <div className="absolute -top-1.5 left-0 right-0 h-1 bg-indigo-600 rounded-full z-20 shadow-xs animate-pulse" />
+                        <div
+                          className={`absolute bg-indigo-600 rounded-full z-20 shadow-xs animate-pulse ${
+                            isZoomed ? '-left-2 top-0 bottom-0 w-1' : '-top-1.5 left-0 right-0 h-1'
+                          }`}
+                        />
                       )}
 
                       {/* Card Tile */}
@@ -374,7 +429,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                         onDragEnd={handleDragEnd}
                         onClick={() => onOpenCardModal(card)}
                         onKeyDown={(e) => handleCardKeyDown(e, card)}
-                        className={`group relative bg-white dark:bg-slate-800/90 rounded-xl shadow-2xs hover:shadow-md border transition-all cursor-pointer overflow-hidden p-3 pl-4 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
+                        className={`group relative ${isZoomed ? 'h-full flex flex-col' : ''} bg-white dark:bg-slate-800/90 rounded-xl shadow-2xs hover:shadow-md border transition-all cursor-pointer overflow-hidden p-3 pl-4 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
                           draggedCardId === card.id ? 'opacity-40 scale-98' : ''
                         } ${
                           isStarred
@@ -496,7 +551,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                         )}
 
                         {/* BOTTOM ROW: Rank #, Project Badge, Due Date, Link Icon on left; Progress Donut on right */}
-                        <div className="flex items-center justify-between gap-2 mt-2.5 text-[11px]">
+                        <div className={`flex items-center justify-between gap-2 text-[11px] ${isZoomed ? 'mt-auto pt-2.5' : 'mt-2.5'}`}>
                           {/* Left Meta Items */}
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                             {/* Priority Rank Badge (#5) */}
@@ -559,15 +614,19 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
                       {/* Insertion Indicator Line (After) */}
                       {isDropTarget && dropPosition === 'after' && (
-                        <div className="absolute -bottom-1.5 left-0 right-0 h-1 bg-indigo-600 rounded-full z-20 shadow-xs animate-pulse" />
+                        <div
+                          className={`absolute bg-indigo-600 rounded-full z-20 shadow-xs animate-pulse ${
+                            isZoomed ? '-right-2 top-0 bottom-0 w-1' : '-bottom-1.5 left-0 right-0 h-1'
+                          }`}
+                        />
                       )}
-                    </div>
+                    </motion.div>
                   );
                 })}
 
                 {/* Inline Collapsible Archive Section in Done Column */}
                 {isDoneCol && archiveCards.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+                  <div className="col-span-full mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
                     <button
                       onClick={() => setIsArchiveOpen(!isArchiveOpen)}
                       className="w-full flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
@@ -589,10 +648,22 @@ export const BoardView: React.FC<BoardViewProps> = ({
                           <div
                             key={archivedCard.id}
                             onClick={() => onOpenArchivedCard(archivedCard)}
-                            className="p-2 rounded bg-slate-200/60 dark:bg-slate-800/60 border border-slate-300/50 dark:border-slate-700/50 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer transition-colors flex items-center justify-between"
+                            title="View archived card"
+                            className="p-2 rounded bg-slate-200/60 dark:bg-slate-800/60 border border-slate-300/50 dark:border-slate-700/50 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer transition-colors"
                           >
-                            <span className="truncate pr-2">{archivedCard.title}</span>
-                            <span className="text-[10px] text-slate-400 shrink-0">View</span>
+                            <div className="truncate font-medium">{archivedCard.title}</div>
+                            <div className="mt-0.5 flex flex-wrap gap-x-3 text-[10px] text-slate-500 dark:text-slate-500">
+                              {archivedCard.completedAt && (
+                                <span className="inline-flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                  Completed {formatFullDate(archivedCard.completedAt)}
+                                </span>
+                              )}
+                              <span className="inline-flex items-center gap-1">
+                                <Archive className="w-3 h-3" />
+                                Archived {formatFullDate(archivedCard.archivedAt) || 'date unknown'}
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -603,7 +674,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
               {/* Quick Add at bottom of column (NOT in Done) */}
               {!isDoneCol && (
-                <div className="p-2 border-t border-slate-200/80 dark:border-slate-800">
+                <motion.div layout="position" className="p-2 border-t border-slate-200/80 dark:border-slate-800">
                   <div className="flex items-center gap-1.5">
                     <input
                       type="text"
@@ -629,12 +700,14 @@ export const BoardView: React.FC<BoardViewProps> = ({
                       </button>
                     )}
                   </div>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </motion.div>
           );
         })}
+        </AnimatePresence>
       </div>
+      </MotionConfig>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Area, CardItem, Column } from '../types';
 import { Star, ExternalLink, Archive, Trash2, X, Calendar, Layers, SlidersHorizontal, Check } from 'lucide-react';
-import { extractUrls } from '../utils/helpers';
+import { extractUrls, getDoneColumnId } from '../utils/helpers';
 import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface CardModalProps {
@@ -76,7 +76,7 @@ export const CardModal: React.FC<CardModalProps> = ({
     onToggleStarAttempt(card?.id || null, starred, title || 'New Task');
   };
 
-  const doneColId = columns.find((c) => c.name.toLowerCase() === 'done')?.id;
+  const doneColId = getDoneColumnId(columns);
   const isDoneStatus = columnId === doneColId;
 
   const urlsInDescription = extractUrls(description);

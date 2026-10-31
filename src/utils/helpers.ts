@@ -1,4 +1,29 @@
-import { BoardData, CardItem, Column } from '../types';
+import { BoardData, CardItem, Column, ColumnRole } from '../types';
+
+// ---- Column roles ----
+// Guess a role from a column name. Only used once, for boards saved before roles existed.
+export function inferColumnRole(name: string): ColumnRole {
+  const n = name.toLowerCase();
+  if (n.includes('done')) return 'done';
+  if (n.includes('blocked')) return 'blocked';
+  if (n.includes('pending')) return 'pending';
+  return 'active';
+}
+
+export function getColumnRole(column: Column | undefined): ColumnRole {
+  if (!column) return 'active';
+  return column.role ?? inferColumnRole(column.name);
+}
+
+export function getDoneColumnId(columns: Column[]): string | undefined {
+  return columns.find((c) => getColumnRole(c) === 'done')?.id;
+}
+
+// Save a role on every column so later renames don't change behaviour
+export function withColumnRoles(columns: Column[]): Column[] {
+  return columns.map((c) => (c.role ? c : { ...c, role: inferColumnRole(c.name) }));
+}
+
 
 // URL regex to detect http/https links
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
@@ -76,6 +101,14 @@ export function formatDueDateLabel(
   }
 }
 
+// Full calendar date, e.g. "Oct 24, 2026" (empty if missing or invalid)
+export function formatFullDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function formatCompletedAtLabel(completedAtStr: string | null): string {
   if (!completedAtStr) return '';
   const completedDate = new Date(completedAtStr);
@@ -131,10 +164,9 @@ export function reorderCardsInGlobalSequence(
   const draggedIndex = cards.findIndex((c) => c.id === draggedCardId);
   if (draggedIndex === -1) return allCards;
 
-  const [draggedCard] = cards.splice(draggedIndex, 1);
-  if (targetColumnId) {
-    draggedCard.columnId = targetColumnId;
-  }
+  // Copy the card instead of changing it: the original belongs to current React state
+  const [original] = cards.splice(draggedIndex, 1);
+  const draggedCard = targetColumnId ? { ...original, columnId: targetColumnId } : original;
 
   const targetIndex = cards.findIndex((c) => c.id === targetCardId);
   if (targetIndex === -1) {
@@ -158,13 +190,14 @@ export function moveCardToColumnEnd(
   const draggedIndex = cards.findIndex((c) => c.id === draggedCardId);
   if (draggedIndex === -1) return allCards;
 
-  const [dragged] = cards.splice(draggedIndex, 1);
-  dragged.columnId = targetColumnId;
-  if (targetColumnId === doneColumnId && !dragged.completedAt) {
-    dragged.completedAt = new Date().toISOString();
-  } else if (targetColumnId !== doneColumnId) {
-    dragged.completedAt = null;
-  }
+  // Copy the card instead of changing it: the original belongs to current React state
+  const [original] = cards.splice(draggedIndex, 1);
+  const isDone = targetColumnId === doneColumnId;
+  const dragged: CardItem = {
+    ...original,
+    columnId: targetColumnId,
+    completedAt: isDone ? original.completedAt || new Date().toISOString() : null,
+  };
 
   // Find the last card in targetColumnId
   let lastTargetColIndex = -1;
@@ -191,7 +224,7 @@ export function generatePlainTextCopy(data: BoardData): string {
   return sortedCards
     .map((card) => {
       const colName = colMap.get(card.columnId) || 'Unknown';
-      const pct = card.columnId === (data.columns.find((c) => c.name.toLowerCase() === 'done')?.id || 'c4')
+      const pct = card.columnId === getDoneColumnId(data.columns)
         ? 100
         : card.progress;
       let line = `${card.priority}. ${card.title} — ${colName} — ${pct}%`;
@@ -204,7 +237,7 @@ export function generatePlainTextCopy(data: BoardData): string {
 }
 
 export function runAutoArchive(data: BoardData): { updatedData: BoardData; archivedCount: number } {
-  const doneColumn = data.columns.find((c) => c.name.toLowerCase() === 'done');
+  const doneColumn = data.columns.find((c) => getColumnRole(c) === 'done');
   if (!doneColumn) return { updatedData: data, archivedCount: 0 };
 
   const daysThreshold = data.settings.autoArchiveDays || 7;
@@ -239,4 +272,80 @@ export function runAutoArchive(data: BoardData): { updatedData: BoardData; archi
   };
 
   return { updatedData, archivedCount: newlyArchived.length };
+}
+
+// ---- Comparing two copies of the board (browser copy vs board.json) ----
+
+// JSON with sorted keys, so key order alone never counts as a difference
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    return `{${Object.keys(obj)
+      .filter((k) => obj[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+export interface BoardDiff {
+  identical: boolean;
+  onlyInBrowser: string[]; // card titles
+  onlyInFile: string[];
+  changed: string[];
+  other: string[]; // board-level differences (order, columns, projects, settings)
+  browserCounts: { cards: number; archived: number };
+  fileCounts: { cards: number; archived: number };
+}
+
+export function diffBoards(browser: BoardData, file: BoardData): BoardDiff {
+  const index = (d: BoardData) => {
+    const m = new Map<string, { card: CardItem; archived: boolean }>();
+    d.cards.forEach((card) => m.set(card.id, { card, archived: false }));
+    (d.archive || []).forEach((card) => m.set(card.id, { card, archived: true }));
+    return m;
+  };
+  // Rank is compared separately as "order", so one move doesn't flag every card
+  const content = (e: { card: CardItem; archived: boolean }) =>
+    stableStringify({ ...e.card, priority: undefined, archived: e.archived });
+
+  const a = index(browser);
+  const b = index(file);
+  const onlyInBrowser: string[] = [];
+  const onlyInFile: string[] = [];
+  const changed: string[] = [];
+
+  a.forEach((entry, id) => {
+    const other = b.get(id);
+    if (!other) onlyInBrowser.push(entry.card.title);
+    else if (content(entry) !== content(other)) changed.push(entry.card.title);
+  });
+  b.forEach((entry, id) => {
+    if (!a.has(id)) onlyInFile.push(entry.card.title);
+  });
+
+  const other: string[] = [];
+  // Only compare the order of cards both copies have
+  const order = (d: BoardData) =>
+    [...d.cards]
+      .filter((c) => a.has(c.id) && b.has(c.id))
+      .sort((x, y) => x.priority - y.priority)
+      .map((c) => c.id)
+      .join(',');
+  if (order(browser) !== order(file)) other.push('Card order is different');
+  if (stableStringify(browser.columns) !== stableStringify(file.columns)) other.push('Columns are different');
+  if (stableStringify(browser.areas) !== stableStringify(file.areas)) other.push('Projects are different');
+  if (stableStringify(browser.settings) !== stableStringify(file.settings)) other.push('Settings are different');
+
+  return {
+    identical: !onlyInBrowser.length && !onlyInFile.length && !changed.length && !other.length,
+    onlyInBrowser,
+    onlyInFile,
+    changed,
+    other,
+    browserCounts: { cards: browser.cards.length, archived: (browser.archive || []).length },
+    fileCounts: { cards: file.cards.length, archived: (file.archive || []).length },
+  };
 }

@@ -10,7 +10,7 @@ TaskDeck is a sleek, local-first personal task tracking board featuring global p
 
 You can run TaskDeck **completely offline without any web server or Node.js runtime**:
 
-1. Simply double-click **`TaskDeck.html`** (or `dist/index.html`) in your browser (Chrome, Firefox, Safari, Edge).
+1. Simply double-click **`TaskDeck.html`** in your browser (Chrome, Firefox, Safari, Edge).
 2. The entire application (React runtime, Tailwind styles, SVG icons, and state management) is bundled into this single HTML file.
 3. All board data persists locally via `localStorage`, IndexedDB, or direct JSON file save/export.
 
@@ -26,7 +26,7 @@ If you edit the source code in `src/`, rebuild the single-file HTML bundle:
    ```bash
    npm run build
    ```
-   This generates `dist/index.html` and updates `TaskDeck.html`.
+   This updates `TaskDeck.html`. (`dist/` is a temporary build folder, ignored by git — always open `TaskDeck.html`.)
 
 3. Dev server (optional for live development):
    ```bash

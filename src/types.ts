@@ -12,10 +12,14 @@ export interface Area {
   color: string;
 }
 
+// What a column means, independent of its name. Renaming a column keeps its role.
+export type ColumnRole = 'pending' | 'active' | 'blocked' | 'done';
+
 export interface Column {
   id: string;
   name: string;
   order: number;
+  role?: ColumnRole; // filled in on load for older boards (see withColumnRoles)
 }
 
 export interface CardItem {

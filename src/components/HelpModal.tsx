@@ -35,6 +35,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
     { key: 'Enter / Space', label: 'Open focused Card Modal' },
     { key: 'Alt + ↑ / ↓', label: 'Move Task Priority Rank Up/Down' },
     { key: 'Alt + ← / →', label: 'Move Task Column Left/Right' },
+    { key: 'Esc', label: 'Leave zoomed column (⤢ button in a column header zooms in)' },
     { key: '?', label: 'Open Help & Shortcuts' },
     { key: 'Esc', label: 'Close Active Modal / Clear Search' },
   ];

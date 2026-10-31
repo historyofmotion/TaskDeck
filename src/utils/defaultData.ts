@@ -14,10 +14,10 @@ export const INITIAL_BOARD_DATA: BoardData = {
     { id: 'a4', name: 'Errands', color: '#F59E0B' },
   ],
   columns: [
-    { id: 'c1', name: 'Pending', order: 0 },
-    { id: 'c2', name: 'In Progress', order: 1 },
-    { id: 'c3', name: 'Blocked', order: 2 },
-    { id: 'c4', name: 'Done', order: 3 },
+    { id: 'c1', name: 'Pending', order: 0, role: 'pending' },
+    { id: 'c2', name: 'In Progress', order: 1, role: 'active' },
+    { id: 'c3', name: 'Blocked', order: 2, role: 'blocked' },
+    { id: 'c4', name: 'Done', order: 3, role: 'done' },
   ],
   cards: [
     {

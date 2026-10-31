@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Area, CardItem, Column } from '../types';
-import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban, ArrowUpToLine, ArrowDownToLine, ArrowUp, ArrowDown } from 'lucide-react';
-import { extractUrls, formatCompletedAtLabel, formatDueDateLabel, getContrastColor } from '../utils/helpers';
+import { Star, GripVertical, Calendar, ExternalLink, CheckCircle2, Menu, ListOrdered, Eye, FolderKanban, ArrowUpToLine, ArrowDownToLine, ArrowUp, ArrowDown, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { extractUrls, formatFullDate, formatCompletedAtLabel, formatDueDateLabel, getColumnRole, getContrastColor, getDoneColumnId } from '../utils/helpers';
 
 interface ListViewProps {
   cards: CardItem[];
@@ -17,7 +17,9 @@ interface ListViewProps {
     targetColumnId: string
   ) => void;
   onToggleStarAttempt: (cardId: string, isCurrentlyStarred: boolean, currentTitle: string) => void;
-  onReorderAllCards?: (newCards: CardItem[]) => void;
+  onReorderAllCards?: (newCards: CardItem[], mode: 'status' | 'project') => void;
+  archiveCards?: CardItem[];
+  onOpenArchivedCard?: (card: CardItem) => void;
 }
 
 export const ListView: React.FC<ListViewProps> = ({
@@ -30,15 +32,18 @@ export const ListView: React.FC<ListViewProps> = ({
   onDragDropCard,
   onToggleStarAttempt,
   onReorderAllCards,
+  archiveCards = [],
+  onOpenArchivedCard,
 }) => {
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<'before' | 'after'>('before');
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState<boolean>(false);
 
   const areaMap = new Map<string, Area>(areas.map((a) => [a.id, a]));
   const columnMap = new Map<string, Column>(columns.map((c) => [c.id, c]));
-  const doneColId = columns.find((c) => c.name.toLowerCase() === 'done')?.id;
+  const doneColId = getDoneColumnId(columns);
 
   // Active cards sorted by priority, followed by Done cards at the bottom
   const activeCards = cards
@@ -53,12 +58,11 @@ export const ListView: React.FC<ListViewProps> = ({
 
   const getStatusColorDot = (colId: string, isDoneItem: boolean) => {
     if (isDoneItem) return 'bg-slate-300 dark:bg-slate-700';
-    const colName = columnMap.get(colId)?.name.toLowerCase() || '';
-    if (colName.includes('pending')) return 'bg-slate-400';
-    if (colName.includes('progress')) return 'bg-blue-500';
-    if (colName.includes('blocked')) return 'bg-amber-500';
-    if (colName.includes('done')) return 'bg-emerald-500';
-    return 'bg-purple-500';
+    const role = getColumnRole(columnMap.get(colId));
+    if (role === 'pending') return 'bg-slate-400';
+    if (role === 'active') return 'bg-blue-500';
+    if (role === 'blocked') return 'bg-amber-500';
+    return 'bg-emerald-500';
   };
 
   // Renumber/Reorder cards by status priority sequence: (Active/In Progress & Blocked) -> Pending -> Done
@@ -66,19 +70,11 @@ export const ListView: React.FC<ListViewProps> = ({
     if (!onReorderAllCards) return;
 
     const getStatusCategoryOrder = (columnId: string): number => {
-      const colName = (columnMap.get(columnId)?.name || '').toLowerCase();
+      const role = getColumnRole(columnMap.get(columnId));
       // Group Active/In Progress and Blocked together so they preserve relative priorities
-      if (
-        colName.includes('progress') ||
-        colName.includes('in progress') ||
-        colName.includes('active') ||
-        colName.includes('blocked')
-      ) {
-        return 1;
-      }
-      if (colName.includes('pending')) return 2;
-      if (colName.includes('done')) return 3;
-      return 4;
+      if (role === 'active' || role === 'blocked') return 1;
+      if (role === 'pending') return 2;
+      return 3;
     };
 
     const sorted = [...cards].sort((a, b) => {
@@ -99,7 +95,7 @@ export const ListView: React.FC<ListViewProps> = ({
       priority: idx + 1,
     }));
 
-    onReorderAllCards(renumbered);
+    onReorderAllCards(renumbered, 'status');
   };
 
   // Renumber/Reorder cards by project priority order:
@@ -116,12 +112,7 @@ export const ListView: React.FC<ListViewProps> = ({
     areaOrderMap.set(null, areas.length);
 
     const getStatusCategory = (columnId: string): 'active' | 'blocked' | 'pending' | 'done' => {
-      if (columnId === doneColId) return 'done';
-      const name = (columnMap.get(columnId)?.name || '').toLowerCase();
-      if (name.includes('done')) return 'done';
-      if (name.includes('blocked')) return 'blocked';
-      if (name.includes('pending')) return 'pending';
-      return 'active';
+      return getColumnRole(columnMap.get(columnId));
     };
 
     const getCardSortScore = (card: CardItem) => {
@@ -163,7 +154,7 @@ export const ListView: React.FC<ListViewProps> = ({
       priority: idx + 1,
     }));
 
-    onReorderAllCards(renumbered);
+    onReorderAllCards(renumbered, 'project');
   };
 
   // Drag handlers
@@ -399,7 +390,7 @@ export const ListView: React.FC<ListViewProps> = ({
             {visibleCards.map((card, index) => {
               const area = card.areaId ? areaMap.get(card.areaId) : null;
               const column = columnMap.get(card.columnId);
-              const isBlocked = column?.name.toLowerCase().includes('blocked');
+              const isBlocked = getColumnRole(column) === 'blocked';
               const isDone = column?.id === doneColId;
               const isFirstDoneCard = isDone && (index === 0 || visibleCards[index - 1].columnId !== doneColId);
               const isTop = isDone ? doneCards[0]?.id === card.id : activeCards[0]?.id === card.id;
@@ -668,6 +659,59 @@ export const ListView: React.FC<ListViewProps> = ({
                 </React.Fragment>
               );
             })}
+          </div>
+        )}
+
+        {/* Archived cards, below Done, with their completed and archived dates */}
+        {archiveCards.length > 0 && (
+          <div className="border-t border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => setIsArchiveOpen(!isArchiveOpen)}
+              aria-expanded={isArchiveOpen}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            >
+              {isArchiveOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <Archive className="w-3.5 h-3.5" />
+              <span>Archived ({archiveCards.length})</span>
+            </button>
+
+            {isArchiveOpen && (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="grid grid-cols-12 gap-3 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  <span className="col-span-6">Task</span>
+                  <span className="col-span-2">Project</span>
+                  <span className="col-span-2 text-right">Completed</span>
+                  <span className="col-span-2 text-right">Archived</span>
+                </div>
+                {archiveCards.map((card) => {
+                  const area = card.areaId ? areaMap.get(card.areaId) : null;
+                  return (
+                    <div
+                      key={card.id}
+                      onClick={() => onOpenArchivedCard?.(card)}
+                      title="View archived card"
+                      className="grid grid-cols-12 gap-3 items-center px-4 py-2 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                    >
+                      <span className="col-span-6 truncate line-through">{card.title}</span>
+                      <span className="col-span-2 truncate">
+                        {area ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold opacity-60"
+                            style={{ backgroundColor: area.color, color: getContrastColor(area.color) }}
+                          >
+                            {area.name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">—</span>
+                        )}
+                      </span>
+                      <span className="col-span-2 text-right whitespace-nowrap">{formatFullDate(card.completedAt) || '—'}</span>
+                      <span className="col-span-2 text-right whitespace-nowrap">{formatFullDate(card.archivedAt) || '—'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Area, BoardData, Column, ThemeOption } from '../types';
+import { Area, BoardData, Column, ColumnRole, ThemeOption } from '../types';
+import { getColumnRole } from '../utils/helpers';
 import { APP_ICON_OPTIONS, getAppIconConfig } from '../utils/appIconUtils';
 import {
   X,
@@ -130,6 +131,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     const newCol: Column = {
       id: `c_${Date.now()}`,
       name: `New Column ${columnsList.length + 1}`,
+      role: 'active',
       order: columnsList.length,
     };
     const updated = [...columnsList, newCol];
@@ -140,6 +142,13 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   // Update Column Name
   const handleColumnNameChange = (id: string, name: string) => {
     const updated = columnsList.map((c) => (c.id === id ? { ...c, name } : c));
+    setColumnsList(updated);
+    onUpdateColumns(updated);
+  };
+
+  // Update Column Type (what the column means, regardless of its name)
+  const handleColumnRoleChange = (id: string, role: ColumnRole) => {
+    const updated = columnsList.map((c) => (c.id === id ? { ...c, role } : c));
     setColumnsList(updated);
     onUpdateColumns(updated);
   };
@@ -510,7 +519,8 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-500">
-                  Manage stage columns. Cards in a deleted column move to the column to its left.
+                  Manage stage columns. Cards in a deleted column move to the column to its left. The type
+                  (Pending, Active, Blocked, Done) sets how a column behaves, so you can rename columns freely.
                 </p>
                 <button
                   type="button"
@@ -534,6 +544,19 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       onChange={(e) => handleColumnNameChange(col.id, e.target.value)}
                       className="flex-1 px-2.5 py-1 rounded text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+
+                    <select
+                      value={getColumnRole(col)}
+                      onChange={(e) => handleColumnRoleChange(col.id, e.target.value as ColumnRole)}
+                      title="Column type: controls auto-archive, completion dates, overdue checks and renumbering"
+                      aria-label={`Type of ${col.name} column`}
+                      className="px-1.5 py-1 rounded text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="active">Active</option>
+                      <option value="blocked">Blocked</option>
+                      <option value="done">Done</option>
+                    </select>
 
                     <div className="flex items-center gap-1">
                       <button
