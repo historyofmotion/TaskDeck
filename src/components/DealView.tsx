@@ -1423,12 +1423,12 @@ const LayoutSwitch: React.FC<{ layout: Layout; onChange: (l: Layout) => void; ve
         onClick={() => onChange(value)}
         aria-pressed={layout === value}
         title={title}
-        className={`flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+        aria-label={text}
+        className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${
           layout === value ? 'bg-[#f3efe4] text-[#1f3a32]' : 'text-[#f3efe4]/70 hover:text-[#f3efe4]'
         }`}
       >
-        <Icon className="w-3.5 h-3.5" />
-        <span className={vertical ? '' : 'hidden sm:inline'}>{text}</span>
+        <Icon className="w-4 h-4" />
       </button>
     ))}
   </div>
