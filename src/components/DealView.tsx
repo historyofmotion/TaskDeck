@@ -94,7 +94,7 @@ export const DealView: React.FC<DealViewProps> = ({
   const [dealSize, setDealSize] = useState(deck.length);
   const [plays, setPlays] = useState<Play[]>([]);
   // Which way the current card leaves (or, after Undo, comes back from): 1 = right, -1 = left
-  const [motionDir, setMotionDir] = useState<{ dir: number; undo: boolean; scrub?: boolean }>({ dir: 0, undo: false });
+  const [motionDir, setMotionDir] = useState<{ dir: number; undo: boolean; scrub?: boolean; compact?: boolean }>({ dir: 0, undo: false });
 
   const [layout, setLayoutState] = useState<Layout>(readLayout);
   const setLayout = (l: Layout) => {
@@ -141,7 +141,8 @@ export const DealView: React.FC<DealViewProps> = ({
     setSelectedId(id);
   };
   // In four-up, the arrow keys act on the selected card (the first one until you pick another)
-  const target = faceUp.find((c) => c.id === selectedId) || faceUp[0];
+  // 4 up: the buttons and arrow keys act only on a card you've picked (none until you click one)
+  const target = isFour ? faceUp.find((c) => c.id === selectedId) : current;
   const doneCards = plays.filter((p) => p.result === 'done').map((p) => p.before);
   const laterCards = plays.filter((p) => p.result === 'later').map((p) => cardById.get(p.id));
   const hoursCleared = sumHours(doneCards);
@@ -394,14 +395,24 @@ export const DealView: React.FC<DealViewProps> = ({
 
           {/* Center: the card(s) in play */}
           <div className="order-1 lg:order-2 flex flex-col items-center gap-6">
+            {liveDeck.length > faceCount && (
+              <ScrubBar
+                cards={liveDeck}
+                start={start}
+                visible={faceCount}
+                areaById={areaById}
+                onScrub={scrubTo}
+                className={isFour ? 'w-[min(92vw,600px)]' : 'w-[min(88vw,420px)]'}
+              />
+            )}
             <div className="flex items-center gap-4 xl:gap-8">
             {current && (
               <SideLabel side="left" label="Not now" sub="skip for this deal" dragX={dragX} className={isFour ? 'hidden xl:flex' : undefined} />
             )}
             {isFour ? (
               current ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)]">
-                  <AnimatePresence initial={false} custom={motionDir} mode="popLayout">
+                <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)]">
+                  <AnimatePresence initial={false} custom={{ ...motionDir, compact: true }}>
                     {faceUp.map((c, i) => (
                       <DealCard
                         key={c.id}
@@ -469,17 +480,24 @@ export const DealView: React.FC<DealViewProps> = ({
                 <div className="flex gap-3">
                   <button
                     onClick={() => play('later')}
-                    title="Set aside for this deal (← key)"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-[#e9c46a]/60 text-[#e9c46a] font-medium hover:bg-[#e9c46a]/10"
+                    disabled={!target}
+                    title={target ? 'Set aside for this deal (← key)' : 'Click a card first'}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-[#e9c46a]/60 text-[#e9c46a] font-medium hover:bg-[#e9c46a]/10 disabled:opacity-35 disabled:hover:bg-transparent"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     Not now
                   </button>
                   <button
                     onClick={() => play('done')}
-                    disabled={!canFinish}
-                    title={canFinish ? 'Move to Done (→ key)' : 'Add a column with type Done in Options to finish cards here'}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#7ed491] text-[#14301f] font-semibold hover:bg-[#93dea3] disabled:opacity-40"
+                    disabled={!canFinish || !target}
+                    title={
+                      !canFinish
+                        ? 'Add a column with type Done in Options to finish cards here'
+                        : target
+                        ? 'Move to Done (→ key)'
+                        : 'Click a card first'
+                    }
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#7ed491] text-[#14301f] font-semibold hover:bg-[#93dea3] disabled:opacity-35 disabled:hover:bg-[#7ed491]"
                   >
                     <Check className="w-4 h-4" />
                     Done
@@ -492,22 +510,14 @@ export const DealView: React.FC<DealViewProps> = ({
                   {isFour && (
                     <>
                       <br />
-                      These buttons and the arrow keys act on the outlined card. Click a card or press 1–4 to pick it;
-                      double-click to see it alone.
+                      {target
+                        ? 'The buttons and arrow keys act on the outlined card.'
+                        : 'Click a card (or press 1–4) to pick it for the buttons and arrow keys.'}{' '}
+                      Double-click a card to see it alone.
                     </>
                   )}
                 </p>
               </>
-            )}
-            {liveDeck.length > faceCount && (
-              <ScrubBar
-                cards={liveDeck}
-                start={start}
-                visible={faceCount}
-                areaById={areaById}
-                onScrub={scrubTo}
-                className={isFour ? 'w-[min(92vw,600px)]' : 'w-[min(88vw,420px)]'}
-              />
             )}
           </div>
 
@@ -625,13 +635,17 @@ const BlockedDetails: React.FC<{
 
 const cardVariants = {
   // Scrubbing: the new card tilts in on top from the side you're scrubbing toward (no see-through fade)
-  enter: (m: { dir: number; undo: boolean; scrub?: boolean }) =>
-    m.scrub ? { x: m.dir * 70, rotateZ: m.dir * 6, scale: 0.97, opacity: 1, zIndex: 2 } : m.undo ? { x: m.dir * 600, rotate: m.dir * 20, opacity: 0 } : { y: 30, scale: 0.94, opacity: 0 },
+  enter: (m: { dir: number; undo: boolean; scrub?: boolean; compact?: boolean }) =>
+    m.scrub
+      ? { x: m.dir * (m.compact ? 16 : 70), rotateZ: m.dir * (m.compact ? 3 : 6), scale: 0.97, opacity: 1, zIndex: 2 }
+      : m.undo ? { x: m.dir * 600, rotate: m.dir * 20, opacity: 0 } : { y: 30, scale: 0.94, opacity: 0 },
   center: { x: 0, y: 0, rotate: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 1 },
   // dir 0 = swapped out from the deck strip: drop back quickly instead of flying off
-  exit: (m: { dir: number; undo: boolean; scrub?: boolean }) =>
+  exit: (m: { dir: number; undo: boolean; scrub?: boolean; compact?: boolean }) =>
     m.scrub
-      ? { x: m.dir * -70, rotateZ: m.dir * -6, scale: 0.94, opacity: 0, zIndex: 0, transition: { duration: 0.2 } }
+      ? m.compact
+        ? { opacity: 0, zIndex: 0, transition: { duration: 0.12 } }
+        : { x: m.dir * -70, rotateZ: m.dir * -6, scale: 0.94, opacity: 0, zIndex: 0, transition: { duration: 0.2 } }
       : m.dir === 0
       ? { y: 24, scale: 0.94, opacity: 0, transition: { duration: 0.16 } }
       : { x: m.dir * 700, rotate: m.dir * 24, opacity: 0 },
@@ -642,7 +656,7 @@ interface DealCardProps {
   area?: Area;
   columnName: string;
   canFinish: boolean;
-  motionDir: { dir: number; undo: boolean; scrub?: boolean };
+  motionDir: { dir: number; undo: boolean; scrub?: boolean; compact?: boolean };
   dragX: MotionValue<number>;
   onPlay: (r: Result) => void;
   onSetEstimate: (hours: number) => void;
@@ -712,13 +726,14 @@ const DealCard: React.FC<DealCardProps> = ({
 
   return (
     <motion.div
-      custom={motionDir}
+      custom={compact ? { ...motionDir, compact: true } : motionDir}
       variants={cardVariants}
       initial="enter"
       animate="center"
       exit="exit"
       transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-      layout={compact ? 'position' : undefined}
+      // 4 up: cards glide to their new slot after a play, but swap in place while scrubbing
+      layout={compact && !motionDir.scrub ? 'position' : undefined}
       drag="x"
       dragSnapToOrigin
       dragElastic={0.9}
@@ -726,11 +741,21 @@ const DealCard: React.FC<DealCardProps> = ({
       onDragEnd={handleDragEnd}
       onTap={onSelect}
       onDoubleClick={onOpenSingle}
-      style={{ x, rotate: tilt }}
+      style={{
+        x,
+        rotate: tilt,
+        // 4 up: each card is pinned to its slot's cell, so a card that's leaving and the one replacing it
+        // share the same cell instead of pushing each other into a new row
+        ...(compact && slot
+          ? ({ '--slot-row': Math.ceil(slot / 2), '--slot-col': ((slot - 1) % 2) + 1, '--slot-stack': slot } as React.CSSProperties)
+          : {}),
+      }}
       whileDrag={{ scale: 1.02, cursor: 'grabbing', zIndex: 20 }}
       aria-label={compact ? `Card ${slot}: ${card.title}${selected ? ' (selected)' : ''}` : undefined}
       className={`${
-        compact ? 'relative h-[min(36vh,290px)] p-5' : 'absolute inset-0 p-7 sm:p-9'
+        compact
+          ? 'relative h-[min(36vh,290px)] p-5 [grid-row:var(--slot-stack)] [grid-column:1] sm:[grid-row:var(--slot-row)] sm:[grid-column:var(--slot-col)]'
+          : 'absolute inset-0 p-7 sm:p-9'
       } rounded-2xl bg-[#faf7ef] text-[#1d1d1b] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.55)] flex flex-col cursor-grab select-none touch-none ${
         compact && selected ? 'ring-2 ring-[#f3efe4] ring-offset-4 ring-offset-[#1f3a32]' : ''
       }`}
@@ -856,26 +881,6 @@ const DealCard: React.FC<DealCardProps> = ({
         )}
       </div>
 
-      {/* Four-up: each card has its own buttons */}
-      {compact && (
-        <div className="flex gap-2 pt-3" {...noDrag} onDoubleClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => onPlay('later')}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full border border-[#c98f12]/50 text-[#a8730a] text-sm font-medium hover:bg-[#c98f12]/10"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Not now
-          </button>
-          <button
-            onClick={() => onPlay('done')}
-            disabled={!canFinish}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full bg-[#7ed491] text-[#14301f] text-sm font-semibold hover:bg-[#6cc981] disabled:opacity-40"
-          >
-            Done
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
     </motion.div>
   );
 };
@@ -1071,9 +1076,6 @@ const ScrubBar: React.FC<{
           style={{ left: `calc(${(start / n) * 100}% + 2px)`, width: `calc(${(visible / n) * 100}% - 4px)` }}
         />
       </div>
-      <p className="text-[11px] text-[#f3efe4]/45 tabular-nums">
-        {visible > 1 ? `${start + 1}–${Math.min(n, start + visible)}` : start + 1} of {n} · drag to look through the deck
-      </p>
     </div>
   );
 };
