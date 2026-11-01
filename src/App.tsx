@@ -49,7 +49,7 @@ import { DealView } from './components/DealView';
 import { MatrixView, QUADRANT_ORDER, matrixScore, quadrantOf } from './components/MatrixView';
 import { WorkIndicator } from './components/WorkIndicator';
 import { WORK_KEY, WorkState, formatTracked, loadWorkState, saveWorkState } from './utils/workTracking';
-import { BoardCheckError, parseBoardFile, summarizeProblems } from './utils/boardCheck';
+import { BoardCheckError, checkBoard, parseBoardFile, summarizeProblems } from './utils/boardCheck';
 import { Toast } from './components/Toast';
 import { HelpModal } from './components/HelpModal';
 
@@ -141,8 +141,17 @@ export default function App() {
       flushPendingSave();
     };
 
+    // Leaving the tab is a more dependable moment to finish writing the file than closing the page
+    const handleHidden = () => {
+      if (document.visibilityState === 'hidden') flushPendingSave();
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleHidden);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleHidden);
+    };
   }, []);
 
   // ---- board.json sync ----
@@ -164,7 +173,15 @@ export default function App() {
   // Compare a file with the browser copy. Same → connect. Different → ask the user.
   function compareWithFile(contents: BoardFileContents, announce: boolean) {
     reportFixes(contents.handle.name, contents.fixes);
-    const diff = diffBoards(boardDataRef.current, contents.data);
+    // The file went through the checker, so check the browser copy the same way; otherwise harmless
+    // differences (a field that is null here and missing there, rounding) look like real changes.
+    let browser = boardDataRef.current;
+    try {
+      browser = checkBoard(JSON.parse(JSON.stringify(browser))).data;
+    } catch {
+      /* a browser copy the checker rejects is compared as it is */
+    }
+    const diff = diffBoards(browser, contents.data);
     if (diff.identical) {
       connectFile(contents.handle);
       if (announce) addToast(`Connected to file: ${contents.handle.name}`, 'success');
@@ -274,9 +291,10 @@ export default function App() {
           activeEl.getAttribute('contenteditable') === 'true');
 
       if (isInput) return;
-      if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync || isDealOpen) {
+      if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync) {
         return;
       }
+      if (isDealOpen && e.key !== 'v' && e.key !== 'V') return; // Deal has its own keys, except V which leaves it
 
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
@@ -290,7 +308,25 @@ export default function App() {
         setShowDetails((prev) => !prev);
       } else if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
-        setViewMode((prev) => (prev === 'board' ? 'list' : prev === 'list' ? 'matrix' : 'board'));
+        if (e.key === 'V') {
+          // Shift + V: the list
+          setViewMode('list');
+          setIsDealOpen(false);
+        } else {
+          // V: Board → Matrix → Deal → Board (from the list it goes to the board)
+          const here = isDealOpen ? 'deal' : viewMode;
+          const next = here === 'board' ? 'matrix' : here === 'matrix' ? 'deal' : 'board';
+          if (next === 'deal') {
+            setIsDealOpen(true);
+          } else {
+            setViewMode(next);
+            setIsDealOpen(false);
+          }
+        }
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setViewMode('matrix');
+        setIsDealOpen(false);
       } else if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         setIsDealOpen(true);
@@ -311,6 +347,7 @@ export default function App() {
     pendingStarCard,
     pendingFileSync,
     isDealOpen,
+    viewMode,
     boardData.columns, // N picks a column, so it needs the current list
     quickAddColumnId,
   ]);
@@ -915,7 +952,11 @@ export default function App() {
       <TopBar
         appIcon={boardData.settings.appIcon}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={(mode) => {
+          setViewMode(mode);
+          setIsDealOpen(false);
+        }}
+        dealOpen={isDealOpen}
         showDetails={showDetails}
         onToggleDetails={() => setShowDetails((prev) => !prev)}
         searchQuery={searchQuery}
@@ -929,7 +970,7 @@ export default function App() {
         }}
         onOpenOptions={() => setIsOptionsOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenDeal={() => setIsDealOpen(true)}
+        onOpenDeal={() => setIsDealOpen((open) => !open)}
         onCopyBoard={handleCopyBoard}
       />
 
@@ -966,8 +1007,30 @@ export default function App() {
       />
 
       {/* Main Views */}
-      <main className="flex-1 mt-1">
-        {viewMode === 'matrix' ? (
+      <main className="flex-1 mt-1 flex flex-col">
+        {isDealOpen ? (
+          <DealView
+            cards={filteredCards}
+            columns={boardData.columns}
+            areas={boardData.areas}
+            filterLabel={
+              selectedAreaId === 'ALL'
+                ? null
+                : selectedAreaId === 'NO_AREA'
+                ? 'No project'
+                : areaMap.get(selectedAreaId)?.name || null
+            }
+            onDone={handleDealDone}
+            onUndoDone={handleDealUndoDone}
+            onSetEstimate={handleSetEstimate}
+            onClose={() => setIsDealOpen(false)}
+            workingCardId={work?.mode === 'working' ? work.cardId : null}
+            onStartWork={handleStartWork}
+            onMakeActive={handleMakeActive}
+            onEditCard={setEditingCard}
+            paused={!!editingCard || !!pendingStarCard}
+          />
+        ) : viewMode === 'matrix' ? (
           <MatrixView
             cards={filteredCards}
             archiveCards={filteredArchive}
@@ -1012,31 +1075,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Deal: play through the top cards */}
-      {isDealOpen && (
-        <DealView
-          cards={filteredCards}
-          columns={boardData.columns}
-          areas={boardData.areas}
-          filterLabel={
-            selectedAreaId === 'ALL'
-              ? null
-              : selectedAreaId === 'NO_AREA'
-              ? 'No project'
-              : areaMap.get(selectedAreaId)?.name || null
-          }
-          onDone={handleDealDone}
-          onUndoDone={handleDealUndoDone}
-          onSetEstimate={handleSetEstimate}
-          onClose={() => setIsDealOpen(false)}
-          workIndicator={workIndicator('felt')}
-          workingCardId={work?.mode === 'working' ? work.cardId : null}
-          onStartWork={handleStartWork}
-          onMakeActive={handleMakeActive}
-          onEditCard={setEditingCard}
-          paused={!!editingCard || !!pendingStarCard}
-        />
-      )}
 
       {/* Create / Edit Card Modal */}
       {(editingCard || isNewCardModalOpen) && (

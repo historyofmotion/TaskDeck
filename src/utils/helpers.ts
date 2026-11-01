@@ -289,7 +289,7 @@ function stableStringify(value: unknown): string {
   if (value && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
     return `{${Object.keys(obj)
-      .filter((k) => obj[k] !== undefined)
+      .filter((k) => obj[k] !== undefined && obj[k] !== null) // null and missing mean the same
       .sort()
       .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
       .join(',')}}`;

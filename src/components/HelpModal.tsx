@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { HelpCircle, X, Keyboard, Sparkles, FileText, CheckCircle } from 'lucide-react';
+import { HelpCircle, X, Keyboard, Sparkles, FileText, CheckCircle, Grid2x2, Spade, Timer } from 'lucide-react';
 import { useModalAccessibility } from '../utils/useModalAccessibility';
 
 interface HelpModalProps {
@@ -28,20 +28,40 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
   }, []);
 
   const shortcuts = [
-    { key: 'N', label: 'Create New Task' },
-    { key: 'V', label: 'Switch view (Board → List → Matrix)' },
-    { key: 'D', label: 'Toggle Card Descriptions' },
-    { key: 'T', label: 'Open Deal, or back to the board from Deal (in Deal: ← not now, → done, Z undo)' },
-    { key: '/', label: 'Focus Search Input' },
-    { key: 'Enter / Space', label: 'Open focused Card Modal' },
-    { key: 'Alt + ↑ / ↓', label: 'Move Task Priority Rank Up/Down' },
-    { key: 'Alt + ← / →', label: 'Move Task Column Left/Right' },
-    { key: 'Esc', label: 'Leave zoomed column (⤢ button in a column header zooms in)' },
-    { key: '?', label: 'Open Help & Shortcuts' },
-    { key: 'Esc', label: 'Close Active Modal / Clear Search' },
+    { key: 'N', label: 'Create new task' },
+    { key: 'V', label: 'Next view: Board → Matrix → Deal' },
+    { key: 'Shift + V', label: 'Go to the List view' },
+    { key: 'M', label: 'Go to the Matrix view' },
+    { key: 'D', label: 'Toggle card descriptions' },
+    { key: 'T', label: 'Open Deal, or leave it' },
+    { key: '/', label: 'Focus search' },
+    { key: 'Enter / Space', label: 'Open the focused card' },
+    { key: 'Alt + ↑ / ↓', label: 'Move task priority up / down' },
+    { key: 'Alt + ← / →', label: 'Move task between columns' },
+    { key: 'Esc', label: 'Leave zoomed column / close dialog / clear search' },
+    { key: '?', label: 'Open this help' },
+    { key: '← / →  (Deal)', label: 'Not now / Done on the current card' },
+    { key: '1–4  (Deal 4-up)', label: 'Pick one of the four cards' },
+    { key: 'F  (Deal)', label: 'Switch 1-up / 4-up' },
+    { key: 'Z  (Deal)', label: 'Undo the last card played' },
   ];
 
   const tips = [
+    {
+      title: 'Matrix view',
+      desc: 'Drag a card so its circle sits where you want it: Impact up and down, Timeframe left to right. Titles run left from the circle near the right edge. Done cards from the last 7 days are in a folded list under the details, where you can make one active again.',
+      icon: Grid2x2,
+    },
+    {
+      title: 'Deal view',
+      desc: 'Active cards (red suits) then pending cards (black suits) in priority order. Drag left for Not now, right for Done, or use the arrow keys. Click a pile to spread it and drag a card back. The scrub bar flips through the first 16.',
+      icon: Spade,
+    },
+    {
+      title: 'Work timer',
+      desc: 'Press Start on a card to track time on it. Starting another card stops the first. Off task pauses tracking without charging the card. The Focus bar shows what you are on.',
+      icon: Timer,
+    },
     {
       title: 'Focus Star Limit (Max 3)',
       desc: 'Star up to 3 high-priority focus tasks to pin them to your focus banner.',
@@ -66,7 +86,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
         aria-modal="true"
         aria-labelledby="help-modal-title"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]"
+        className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -98,7 +118,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                   key={sc.key}
                   className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 text-xs"
                 >
-                  <span className="text-slate-600 dark:text-slate-300 font-medium truncate pr-2">
+                  <span className="text-slate-600 dark:text-slate-300 font-medium pr-2">
                     {sc.label}
                   </span>
                   <kbd className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-[11px] text-slate-700 dark:text-slate-300 shadow-2xs shrink-0">

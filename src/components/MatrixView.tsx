@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, PanInfo } from 'motion/react';
-import { ArrowUp, Ban, Check, Clock, ExternalLink, ListOrdered, Pencil, Play, Star, Undo2 } from 'lucide-react';
+import { ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, ListOrdered, Pencil, Play, Star, Undo2 } from 'lucide-react';
 import { Area, CardItem, Column, ColumnRole } from '../types';
 import { extractUrls, formatDueDateLabel, formatHours, getColumnRole } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
@@ -91,6 +91,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // What a dragged card would land in right now: a quadrant, the tray, or nothing
   const [hover, setHover] = useState<Quadrant | 'tray' | null>(null);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const areaById = useMemo(() => new Map(areas.map((a) => [a.id, a])), [areas]);
   const roleOf = useMemo(() => {
@@ -121,13 +122,19 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   const archiveIds = useMemo(() => new Set(archiveCards.map((c) => c.id)), [archiveCards]);
   const selected = [...open, ...recentDone].find((c) => c.id === selectedId) || urgent[0];
 
-  // Where the pointer is: a spot on the grid (0–1 on each axis), the tray, or nowhere
-  const locate = (e: MouseEvent | TouchEvent | PointerEvent): { x: number; y: number } | 'tray' | null => {
+  // Where a drag is: the grid spot under the card's circle (0–1 on each axis), the tray under the pointer, or nowhere
+  const locate = (e: MouseEvent | TouchEvent | PointerEvent, dot: Point): { x: number; y: number } | 'tray' | null => {
     const pt = 'changedTouches' in e ? e.changedTouches[0] : (e as MouseEvent);
     const g = gridRef.current?.getBoundingClientRect();
-    if (g && pt.clientX >= g.left && pt.clientX <= g.right && pt.clientY >= g.top && pt.clientY <= g.bottom) {
-      const clamp = (v: number) => Math.min(0.97, Math.max(0.03, v));
-      return { x: clamp((pt.clientX - g.left) / g.width), y: clamp(1 - (pt.clientY - g.top) / g.height) };
+    const slack = 24; // a circle dropped just past the edge still counts, and lands at the edge
+    if (g && dot.x >= g.left - slack && dot.x <= g.right + slack && dot.y >= g.top - slack && dot.y <= g.bottom + slack) {
+      // closest the circle can get while the whole pill stays inside the grid
+      const mx = 16 / g.width;
+      const my = 16 / g.height;
+      return {
+        x: Math.min(1 - mx, Math.max(mx, (dot.x - g.left) / g.width)),
+        y: Math.min(1 - my, Math.max(my, 1 - (dot.y - g.top) / g.height)),
+      };
     }
     const t = trayRef.current?.getBoundingClientRect();
     if (t && pt.clientX >= t.left && pt.clientX <= t.right && pt.clientY >= t.top && pt.clientY <= t.bottom) return 'tray';
@@ -135,15 +142,15 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   };
 
   // While dragging: light up only the quadrant (or the tray) it would drop into
-  const handleDragMove = (e: MouseEvent | TouchEvent | PointerEvent) => {
-    const spot = locate(e);
+  const handleDragMove = (e: MouseEvent | TouchEvent | PointerEvent, dot: Point) => {
+    const spot = locate(e, dot);
     setHover(spot === 'tray' ? 'tray' : spot ? quadrantOf(spot) : null);
   };
 
-  const handleDrop = (card: CardItem, e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+  const handleDrop = (card: CardItem, e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => {
     setHover(null);
     if (Math.hypot(info.offset.x, info.offset.y) < 4) return; // a click, not a move
-    const spot = locate(e);
+    const spot = locate(e, dot);
     const isDone = roleOf(card) === 'done' || archiveIds.has(card.id);
     if (isDone) {
       // A finished card dragged back onto the grid (or the tray) is open again
@@ -165,13 +172,13 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
     onSelect: () => setSelectedId(c.id),
     onOpen: () => onOpenCard(c),
     onDragMove: handleDragMove,
-    onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => handleDrop(c, e, info),
+    onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => handleDrop(c, e, info, dot),
   });
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto px-4 pb-6 grid grid-cols-1 xl:grid-cols-[auto_300px] justify-center gap-5">
+    <div className="w-full max-w-[1600px] mx-auto px-4 pb-6 grid grid-cols-1 xl:grid-cols-[auto_320px] justify-center gap-5">
       {/* ---- The matrix (sized so each quadrant is a square) ---- */}
-      <div className="min-w-0 mx-auto w-[min(92vw,660px,max(420px,calc(100vh-17rem)))]">
+      <div className="min-w-0 mx-auto w-[min(92vw,900px,max(460px,calc(100vh-18rem)))]">
         <div className="flex">
           {/* vertical axis */}
           <div className="w-6 shrink-0 flex flex-col items-center justify-between py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 select-none">
@@ -198,15 +205,9 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
               </div>
             ))}
 
-            {/* placed cards, centred on their spot */}
+            {/* placed cards: the circle sits exactly on the spot; the title runs right, or left near the right edge */}
             {placed.map((c) => (
-              <div
-                key={`${c.id}:${c.matrix!.x}:${c.matrix!.y}`}
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-10"
-                style={{ left: `${c.matrix!.x * 100}%`, top: `${(1 - c.matrix!.y) * 100}%` }}
-              >
-                <Chip {...chipProps(c)} />
-              </div>
+              <PlacedChip key={`${c.id}:${c.matrix!.x}:${c.matrix!.y}`} card={c} chip={chipProps(c)} />
             ))}
 
             {placed.length === 0 && (
@@ -327,24 +328,88 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
           )}
         </AnimatePresence>
 
-        {/* pushed to the bottom of the panel */}
+
+        {/* finished in the last week, folded away until you want one back */}
         {recentDone.length > 0 && (
-          <section className="mt-auto pt-2">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5">Done in the last {RECENT_DAYS} days</p>
-            <p className="text-[11px] text-slate-400 mb-1.5">Drag one onto the grid to reopen it, or click for details</p>
-            <ul className="flex flex-col items-start gap-1">
-              {recentDone.map((c) => (
-                <li key={c.id} className="max-w-full">
-                  <Chip {...chipProps(c)} role="done" />
-                </li>
-              ))}
-            </ul>
+          <section>
+            <button
+              onClick={() => setDoneOpen((o) => !o)}
+              aria-expanded={doneOpen}
+              className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+            >
+              {doneOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              Done in the last {RECENT_DAYS} days
+              <span className="font-normal text-slate-400">{recentDone.length}</span>
+            </button>
+            {doneOpen && (
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {recentDone.map((c) => (
+                  <li key={c.id} className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <Chip {...chipProps(c)} role="done" />
+                    </div>
+                    <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                      {new Date(c.completedAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </span>
+                    <button
+                      onClick={() => onReopen(c.id, null)}
+                      title="Make it active again: it goes back to your To do column"
+                      className="ml-auto shrink-0 flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      <Undo2 className="w-3 h-3" />
+                      Make active
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {doneOpen && <p className="mt-1.5 text-[11px] text-slate-400">Or drag one onto the grid to place it too.</p>}
           </section>
         )}
       </aside>
     </div>
   );
 };
+
+type Point = { x: number; y: number };
+
+// A placed card. The circle is the card's exact spot; the title runs to its right, or to its left
+// when it would pass the right edge of the grid, so the whole pill stays inside.
+const PlacedChip: React.FC<{
+  card: CardItem;
+  chip: Omit<React.ComponentProps<typeof Chip>, 'flip'>;
+}> = ({ card, chip }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState(false);
+  const m = card.matrix!;
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = wrapRef.current;
+      const g = el?.parentElement; // the grid (its ref isn't attached yet on first mount)
+      if (!el || !g) return;
+      setFlip(m.x * g.clientWidth + (el.offsetWidth - DOT_OFFSET) > g.clientWidth - 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (wrapRef.current?.parentElement) ro.observe(wrapRef.current.parentElement);
+    return () => ro.disconnect();
+  }, [m.x, card.title, card.starred, chip.role]);
+  return (
+    <div
+      ref={wrapRef}
+      className="absolute z-10 w-max max-w-[190px]"
+      style={{
+        left: `${m.x * 100}%`,
+        top: `${(1 - m.y) * 100}%`,
+        transform: flip ? `translate(calc(-100% + ${DOT_OFFSET}px), -50%)` : `translate(-${DOT_OFFSET}px, -50%)`,
+      }}
+    >
+      <Chip {...chip} flip={flip} />
+    </div>
+  );
+};
+
+const DOT_OFFSET = 14; // from a pill's edge to the centre of its circle
 
 // ---- A card on the matrix: a small pill you can drag ----
 
@@ -356,9 +421,15 @@ const Chip: React.FC<{
   working: boolean;
   onSelect: () => void;
   onOpen: () => void;
-  onDragMove: (e: MouseEvent | TouchEvent | PointerEvent) => void;
-  onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void;
-}> = ({ card, role, area, selected, working, onSelect, onOpen, onDragMove, onDrop }) => {
+  flip?: boolean; // circle on the right, title to its left
+  onDragMove: (e: MouseEvent | TouchEvent | PointerEvent, dot: Point) => void;
+  onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => void;
+}> = ({ card, role, area, selected, working, flip, onSelect, onOpen, onDragMove, onDrop }) => {
+  const dotRef = useRef<HTMLSpanElement>(null);
+  const dotCentre = (): Point => {
+    const r = dotRef.current?.getBoundingClientRect();
+    return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: -1, y: -1 };
+  };
   const blocked = role === 'blocked';
   const active = role === 'active';
   const done = role === 'done';
@@ -368,13 +439,13 @@ const Chip: React.FC<{
       dragMomentum={false}
       dragSnapToOrigin
       dragElastic={0}
-      whileDrag={{ scale: 1.06, zIndex: 50, cursor: 'grabbing' }}
-      onDrag={(e) => onDragMove(e)}
-      onDragEnd={onDrop}
+      whileDrag={{ zIndex: 50, cursor: 'grabbing', boxShadow: '0 8px 18px rgba(15,23,42,0.25)' }}
+      onDrag={(e) => onDragMove(e, dotCentre())}
+      onDragEnd={(e, info) => onDrop(e, info, dotCentre())}
       onTap={onSelect}
       onDoubleClick={onOpen}
       title={`${card.title}${blocked ? ' (blocked)' : active ? ' (in progress)' : done ? ' (done)' : ''}`}
-      className={`relative flex items-center gap-1.5 h-7 max-w-[190px] pl-1.5 pr-2.5 rounded-full border text-xs font-medium shadow-xs cursor-grab touch-none select-none whitespace-nowrap ${
+      className={`relative flex items-center gap-1.5 h-7 max-w-[190px] ${flip ? 'flex-row-reverse pr-1.5 pl-2.5' : 'pl-1.5 pr-2.5'} rounded-full border text-xs font-medium shadow-xs cursor-grab touch-none select-none whitespace-nowrap ${
         done
           ? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'
           : blocked
@@ -384,18 +455,20 @@ const Chip: React.FC<{
           : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
       } ${selected ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-950' : ''}`}
     >
-      {done ? (
-        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-      ) : blocked ? (
-        <Ban className="w-4 h-4 text-red-500 shrink-0" />
-      ) : active ? (
-        <span className="relative flex w-4 h-4 shrink-0 items-center justify-center rounded-full bg-emerald-500">
-          {working && <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" />}
-          <Play className="relative w-2.5 h-2.5 text-white fill-white" />
-        </span>
-      ) : (
-        <span className="w-4 h-4 shrink-0 rounded-full border-2" style={{ borderColor: area?.color || '#94a3b8' }} />
-      )}
+      <span ref={dotRef} className="flex w-4 h-4 shrink-0">
+        {done ? (
+          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+        ) : blocked ? (
+          <Ban className="w-4 h-4 text-red-500 shrink-0" />
+        ) : active ? (
+          <span className="relative flex w-4 h-4 shrink-0 items-center justify-center rounded-full bg-emerald-500">
+            {working && <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" />}
+            <Play className="relative w-2.5 h-2.5 text-white fill-white" />
+          </span>
+        ) : (
+          <span className="w-4 h-4 shrink-0 rounded-full border-2" style={{ borderColor: area?.color || '#94a3b8' }} />
+        )}
+      </span>
       {(active || blocked) && area && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: area.color }} />}
       <span className={`truncate ${blocked ? 'line-through decoration-red-300/70' : done ? 'line-through decoration-slate-300 dark:decoration-slate-600' : ''}`}>{card.title}</span>
       {card.starred && <Star className="w-3 h-3 shrink-0 fill-amber-400 text-amber-500" />}

@@ -106,7 +106,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 
 ### 7.1 Deal
 
-- **DEAL-1** Deal opens a full-screen card table, from the Deal button or the T key.
+- **DEAL-1** Deal opens a card table in place of the board, list or matrix, from the Deal button (which toggles it) or the T key. The app's top bar and Focus bar stay visible above it, and choosing Board, List or Matrix there leaves Deal.
 - **DEAL-2** The deck holds up to 16 cards: cards in Active-type columns first, then Pending-type columns, each in rank order, after the current search and project filter. Blocked and Done cards are never dealt.
 - **DEAL-3** One card is face up at a time, showing its project, star, rank, column, title, description (up to 5 lines, with URLs taken out and shown instead as link icons with the site name, which open in a new tab; icon only in 4 up), progress bar (when above 0%), hour estimate and due date.
 - **DEAL-4** Done (button, → key, or dragging/flicking the card right) must move the card to the Done column with a completion time, exactly like dropping it at the end of the Done column. Done is disabled when no column has type Done.
@@ -150,12 +150,12 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 
 - **MATRIX-1** The Matrix view is a square 2×2 grid, so each quadrant is a square. The vertical axis is Impact (Major at the top, Minor at the bottom, with an upward arrow); the horizontal axis is Timeframe (When possible on the left, Immediate on the right).
 - **MATRIX-2** The quadrants are Important (top left, blue), Urgent (top right, green), Needed (bottom right, yellow) and Questionable (bottom left, neutral), each with a short description.
-- **MATRIX-3** Open cards (Active, Pending, Blocked; after search and filter) appear as small pills. A card is placed by dragging it anywhere on the grid; its spot is saved on the card (`matrix`) and kept until moved. While dragging, only the quadrant it would land in is highlighted. Dragging it back to the "Not placed yet" tray removes its spot. Cards with no spot wait in that tray, in progress first, then blocked, then pending (each in rank order).
+- **MATRIX-3** Open cards (Active, Pending, Blocked; after search and filter) appear as small pills. A card is placed by dragging it onto the grid; what counts is where the pill's circle (its left or right end) is dropped, not where the pointer grabbed it, so long and short titles place equally precisely. The circle sits exactly on the card's saved spot. The title runs to the right of the circle; if it would pass the grid's right edge the pill flips (circle on the right, title to its left) so it always stays fully inside the grid. Dropping on the tray unplaces. While dragging, only the quadrant under the circle lights up. The grid is as large as the window allows (up to 900px wide) without the page scrolling.
 - **MATRIX-4** Pills show the state: Pending is a plain pill with a project-coloured ring; In progress has a green play badge and green border (the badge pings while its timer runs); Blocked has a dashed red border, a block icon and struck-through text. Starred cards show a star. A legend sits under the grid.
 - **MATRIX-5** The side panel shows the Urgent corner's total estimated hours and card count (and how many have no estimate), and lists its cards nearest the top-right corner first.
 - **MATRIX-6** Clicking a pill shows its details in the side panel (project, state, quadrant, title, description, link icons, tracked time, estimate, due date) with Edit and Start (timer) buttons; double-clicking opens the full editor.
 - **MATRIX-7** "Use matrix order for ranks" renumbers the board: Urgent, Important, Needed, Questionable, nearest the top-right first within each; then unplaced open cards in their current order; then Done. Starred cards still stay on top. The matrix never changes ranks on its own.
-- **MATRIX-8** Done cards aren't on the grid. Cards completed in the last 7 days (including archived ones) are listed at the bottom of the side panel under "Done in the last 7 days", up to 6, as pills. Dragging one onto the grid (or the tray) must reopen it: it moves to the first To do (Pending) column, its completion is cleared, an archived card returns to the board, and it is placed where it was dropped. Clicking one shows its details with a "Not done" button that reopens it the same way (back at its old spot, or in the tray if it had none).
+- **MATRIX-8** Done cards aren't on the grid. Cards completed in the last 7 days (including archived ones) are listed, up to 6, in a collapsible "Done in the last 7 days" section in the side panel under the selected card's details (collapsed by default). Each row has the pill, the date and a "Make active" button that reopens it: it moves to the first To do (Pending) column, its completion is cleared, and an archived card returns to the board. Dragging a row's pill onto the grid (or the tray) also reopens it, placed where it was dropped. Clicking a pill shows its details with a "Not done" button that does the same.
 
 ## 8. Card editor
 
@@ -170,7 +170,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 - **SAVE-2** The user can connect a JSON file (Options), either by picking an existing file or by creating a new `board.json`. The connection is remembered across reloads.
 - **SAVE-3** While a file is connected, each change is also written to it 0.5 s later. A pending write is flushed when the page closes.
 - **SYNC-1** Before using a connected file, both when the app opens and when the user connects one, the app reads it and compares it with the browser copy. Nothing is written to the file until this check is done.
-- **SYNC-2** If the two copies match (ignoring JSON key order), the file connects without a prompt.
+- **SYNC-2** If the two copies match (ignoring JSON key order, and treating a null field the same as a missing one; the browser copy is run through the same file check before comparing, so harmless differences like rounding don't count), the file connects without a prompt.
 - **SYNC-3** If they differ, a dialog shows:
   - each copy's save time, with the newer one marked;
   - the card and archived-card counts for each copy;
@@ -230,14 +230,16 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 | Key | Action |
 |---|---|
 | N | New card |
-| V | Switch view: Board → List → Matrix |
+| V | Switch view: Board → Matrix → Deal → Board (from the List it goes to the Board); works inside Deal too |
+| Shift + V | Go to the List view |
+| M | Go to the Matrix view (also leaves Deal) |
 | D | Show or hide descriptions |
 | T | Open Deal; in Deal, back to the board |
 | ← / → / Z (in Deal) | Not now / Done / Undo |
 | F / 1–4 (in Deal) | Switch 1 card / 4 up; select a card in 4 up |
 | / | Focus search |
 | Esc | Clear search (when search has focus), close the open dialog, or leave column zoom |
-| ? | Help |
+| ? | Help (lists all shortcuts, including the Deal keys, plus tips on Matrix, Deal and the work timer) |
 | Alt + ↑ / ↓ | Change the focused card's rank by one |
 | Alt + ← / → | Move the focused card to the previous or next column |
 | Enter / Space | Open the focused card |

@@ -381,12 +381,6 @@ export const DealView: React.FC<DealViewProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [play, undo, onClose, isFour, faceUp, openBlockedId, openDeckId, openPile, pileSelId, plays, paused]);
 
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
 
   const weekday = new Date().toLocaleDateString(undefined, { weekday: 'long' });
   const moreCardsLeft = buildDeck(cards, columns, new Set([...seenRef.current, ...plays.map((p) => p.id)])).length > 0;
@@ -429,14 +423,12 @@ export const DealView: React.FC<DealViewProps> = ({
   return (
     <MotionConfig reducedMotion="user">
       <div
-        role="dialog"
-        aria-modal="true"
+        role="region"
         aria-label="Deal: play through your top tasks"
-        className="fixed inset-0 z-40 flex flex-col overflow-y-auto overflow-x-hidden bg-[#1f3a32] text-[#f3efe4] font-sans"
+        className="relative flex-1 flex flex-col overflow-x-hidden bg-[#1f3a32] text-[#f3efe4] font-sans"
       >
         {/* Header */}
         <header className="flex items-center gap-3 px-4 sm:px-8 py-4 border-b border-white/10 shrink-0">
-          <span className="font-serif text-xl font-bold tracking-tight">TaskDeck</span>
           <span className="text-sm text-[#f3efe4]/70 truncate">
             {weekday}'s deal{filterLabel ? ` · ${filterLabel}` : ''}
           </span>

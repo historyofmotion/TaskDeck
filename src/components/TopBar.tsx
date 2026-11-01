@@ -31,6 +31,7 @@ interface TopBarProps {
   onOpenOptions: () => void;
   onOpenHelp: () => void;
   onOpenDeal: () => void;
+  dealOpen: boolean; // Deal is showing instead of the board / list / matrix
   onCopyBoard: () => void;
 }
 
@@ -49,6 +50,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenOptions,
   onOpenHelp,
   onOpenDeal,
+  dealOpen,
   onCopyBoard,
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -112,7 +114,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             title="Board view (Shortcut: V cycles Board, List, Matrix)"
             aria-label="Switch to Board view"
             className={`flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all ${
-              viewMode === 'board'
+              !dealOpen && viewMode === 'board'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
@@ -126,7 +128,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             title="List view (Shortcut: V)"
             aria-label="Switch to List view"
             className={`flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all ${
-              viewMode === 'list'
+              !dealOpen && viewMode === 'list'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
@@ -140,7 +142,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             title="Matrix view: drag cards by impact and timeframe (Shortcut: V)"
             aria-label="Switch to Matrix view"
             className={`flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all ${
-              viewMode === 'matrix'
+              !dealOpen && viewMode === 'matrix'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
@@ -153,7 +155,12 @@ export const TopBar: React.FC<TopBarProps> = ({
             onClick={onOpenDeal}
             title="Deal your top cards (Shortcut: T, press again to come back)"
             aria-label="Deal your top cards"
-            className="flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+            aria-pressed={dealOpen}
+            className={`flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all ${
+              dealOpen
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
           >
             <Spade className="w-3.5 h-3.5" />
             <span>Deal</span>
