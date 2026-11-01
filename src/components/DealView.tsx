@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig, MotionValue, motion, useMotionValue, useTransform, PanInfo } from 'motion/react';
-import { ArrowLeft, ArrowRight, Ban, Check, Clock, Crown, Pencil, Info, LayoutGrid, Play, Square, Star, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Ban, Check, Clock, Crown, ExternalLink, Pencil, Info, LayoutGrid, Play, Square, Star, Undo2, X } from 'lucide-react';
 import { Area, CardItem, Column } from '../types';
-import { formatDueDateLabel, formatHours, getColumnRole, getDoneColumnId } from '../utils/helpers';
+import { extractUrls, formatDueDateLabel, formatHours, getColumnRole, getDoneColumnId, replaceUrlsWithLinkToken } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
 
 // "Deal" mode: the top cards of the Active and Pending columns are dealt one at a time.
@@ -89,6 +89,47 @@ const faceMap = (ids: string[]): Record<string, Face> => {
   return faces;
 };
 
+// Description without its URLs (they're shown as link icons instead)
+const descriptionText = (text: string) =>
+  replaceUrlsWithLinkToken(text)
+    .replace(/\[Link\]/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+const linkLabel = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+};
+
+// One icon per link in the description; opens in a new tab and never starts a drag or a double-click
+const LinkIcons: React.FC<{ text: string; showHost?: boolean; className?: string }> = ({ text, showHost, className = '' }) => {
+  const urls = extractUrls(text);
+  if (!urls.length) return null;
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {urls.map((u) => (
+        <a
+          key={u}
+          href={u}
+          target="_blank"
+          rel="noopener noreferrer"
+          onPointerDownCapture={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          title={u}
+          className="inline-flex items-center gap-1 max-w-[12rem] px-1.5 py-0.5 rounded-md border border-[#d8d1c0] text-[12px] text-[#4a4840] hover:bg-[#efe9da] hover:text-[#1d1d1b]"
+        >
+          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+          {showHost && <span className="truncate">{linkLabel(u)}</span>}
+        </a>
+      ))}
+    </div>
+  );
+};
+
 const sumHours = (cards: (CardItem | undefined)[]) =>
   cards.reduce((t, c) => t + (c?.estimateHours || 0), 0);
 
@@ -134,7 +175,9 @@ export const DealView: React.FC<DealViewProps> = ({
   const [pos, setPos] = useState(0); // index in the deck of the first face-up card (moved by the scrub bar)
   const [openBlockedId, setOpenBlockedId] = useState<string | null>(null);
   const [openDeckId, setOpenDeckId] = useState<string | null>(null);
-  const [openPile, setOpenPile] = useState<Result | null>(null); // a pile fanned out to show its cards // a "Still in the deck" card's details
+  const [openPile, setOpenPile] = useState<Result | null>(null); // a pile fanned out to show its cards
+  const [pileSelId, setPileSelId] = useState<string | null>(null); // a card picked in an open pile (arrow keys act on it)
+  const [pileDragging, setPileDragging] = useState(false); // a pile card is being dragged toward the table // a "Still in the deck" card's details
 
   // Plays from earlier deals in this session, so "Deal again" doesn't repeat set-aside cards
   const seenRef = useRef<Set<string>>(new Set());
@@ -207,15 +250,35 @@ export const DealView: React.FC<DealViewProps> = ({
   );
 
   // Take any card back out of a pile (an undo for that one card). From Done it returns to its column and rank.
-  const bringBack = (id: string) => {
+  // dropped: it was dragged onto the table, so it settles in place instead of flying in from the side
+  const bringBack = (id: string, dropped = false) => {
     const played = plays.find((p) => p.id === id);
     if (!played) return;
-    setMotionDir({ dir: played.result === 'done' ? 1 : -1, undo: true });
+    setMotionDir(dropped ? { dir: 0, undo: false } : { dir: played.result === 'done' ? 1 : -1, undo: true });
     setPlays((p) => p.filter((x) => x.id !== id));
     setDeck((d) => [id, ...d.filter((x) => x !== id)]);
     setPos(0);
     setSelectedId(id);
     if (played.result === 'done' && played.before) onUndoDone(played.before);
+    if (plays.filter((p) => p.result === played.result).length <= 1) setOpenPile(null);
+    setPileSelId(null);
+  };
+
+  // Move a played card straight to the other pile (→ = Done, ← = Not now), like playing it again
+  const movePlayed = (id: string, to: Result) => {
+    const played = plays.find((p) => p.id === id);
+    if (!played || played.result === to) return;
+    if (to === 'done') {
+      if (!canFinish) return;
+      const card = cardById.get(id);
+      if (!card) return;
+      setPlays((p) => [...p.filter((x) => x.id !== id), { id, result: 'done', before: card }]);
+      onDone(id);
+    } else {
+      if (played.before) onUndoDone(played.before);
+      setPlays((p) => [...p.filter((x) => x.id !== id), { id, result: 'later' }]);
+    }
+    setPileSelId(null);
     if (plays.filter((p) => p.result === played.result).length <= 1) setOpenPile(null);
   };
   // Cards in each pile, newest first, as they looked when played
@@ -270,6 +333,16 @@ export const DealView: React.FC<DealViewProps> = ({
       const el = document.activeElement;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
       // A blocked card's details are open: Esc closes them (it stays blocked), other keys do nothing
+      // A card picked in an open pile: → Done, ← Not now, Enter back to the deck, Esc lets go
+      if (pileSelId && plays.some((p) => p.id === pileSelId)) {
+        if (e.key === 'ArrowRight') movePlayed(pileSelId, 'done');
+        else if (e.key === 'ArrowLeft') movePlayed(pileSelId, 'later');
+        else if (e.key === 'Enter') bringBack(pileSelId);
+        else if (e.key === 'Escape') setPileSelId(null);
+        else return;
+        e.preventDefault();
+        return;
+      }
       if (openPile && e.key === 'Escape') {
         e.preventDefault();
         setOpenPile(null);
@@ -306,7 +379,7 @@ export const DealView: React.FC<DealViewProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [play, undo, onClose, isFour, faceUp, openBlockedId, openDeckId, openPile, paused]);
+  }, [play, undo, onClose, isFour, faceUp, openBlockedId, openDeckId, openPile, pileSelId, plays, paused]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -368,25 +441,9 @@ export const DealView: React.FC<DealViewProps> = ({
             {weekday}'s deal{filterLabel ? ` · ${filterLabel}` : ''}
           </span>
           <HowItWorks filterLabel={filterLabel} />
-          <div className="ml-auto flex items-center p-0.5 rounded-lg bg-black/20 border border-white/10" role="group" aria-label="Cards on the table">
-            {([
-              ['single', Square, '1 card', 'Show one card at a time (F)'],
-              ['four', LayoutGrid, '4 up', 'Show four cards and pick one (F)'],
-            ] as const).map(([value, Icon, text, title]) => (
-              <button
-                key={value}
-                onClick={() => setLayout(value)}
-                aria-pressed={layout === value}
-                title={title}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  layout === value ? 'bg-[#f3efe4] text-[#1f3a32]' : 'text-[#f3efe4]/70 hover:text-[#f3efe4]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{text}</span>
-              </button>
-            ))}
-          </div>
+          {/* On wide screens the switch sits beside the cards instead (see the table below) */}
+          <LayoutSwitch layout={layout} onChange={setLayout} className="ml-auto lg:hidden" />
+          <span className="hidden lg:block ml-auto" />
           <span className="text-sm text-[#f3efe4]/70 whitespace-nowrap">
             {plays.length} of {dealSize} played
           </span>
@@ -423,11 +480,16 @@ export const DealView: React.FC<DealViewProps> = ({
             <Pile
               label="Not now"
               count={laterCards.length}
-              topCard={laterCards[laterCards.length - 1]}
-              areaById={areaById}
               tone="later"
               open={openPile === 'later'}
-              onToggle={() => setOpenPile(openPile === 'later' ? null : 'later')}
+              onToggle={() => {
+                setPileSelId(null);
+                setOpenPile(openPile === 'later' ? null : 'later');
+              }}
+              selectedId={pileSelId}
+              onSelect={(id) => setPileSelId(pileSelId === id ? null : id)}
+              faces={faces}
+              onDragging={setPileDragging}
               cards={pileCards('later')}
               suitOf={suitOf}
               onBringBack={bringBack}
@@ -500,13 +562,30 @@ export const DealView: React.FC<DealViewProps> = ({
                 className={isFour ? 'w-[min(92vw,600px)]' : 'w-[min(88vw,420px)]'}
               />
             )}
-            <div className="flex items-center gap-4 xl:gap-8">
+            {/* Drop zone: a pile card dragged here comes back into play */}
+            <div
+              id="deal-drop-zone"
+              className={`relative flex items-center gap-4 xl:gap-8 rounded-3xl transition-[outline-color] outline-2 outline-dashed outline-offset-8 ${
+                pileDragging ? 'outline-[#f3efe4]/45' : 'outline-transparent'
+              }`}
+            >
+              <LayoutSwitch
+                layout={layout}
+                onChange={setLayout}
+                vertical
+                className="hidden lg:flex absolute left-full bottom-0 ml-5 z-10"
+              />
+              {pileDragging && (
+                <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap px-3 py-1 rounded-full bg-[#f3efe4] text-[#1f3a32] text-xs font-semibold shadow">
+                  Drop here to bring it back
+                </span>
+              )}
             {current && (
               <SideLabel side="left" label="Not now" sub="skip for this deal" dragX={dragX} className={isFour ? 'hidden xl:flex' : undefined} />
             )}
             {isFour ? (
               current ? (
-                <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)]">
+                <div data-drop-target className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)]">
                   <AnimatePresence initial={false} custom={{ ...motionDir, compact: true }}>
                     {faceUp.map((c, i) => (
                       <DealCard
@@ -537,7 +616,7 @@ export const DealView: React.FC<DealViewProps> = ({
                 endPanel
               )
             ) : (
-            <div className="relative w-[min(88vw,420px)] h-[min(70vh,520px)]">
+            <div data-drop-target className="relative w-[min(88vw,420px)] h-[min(70vh,520px)]">
               <AnimatePresence initial={false} custom={motionDir} mode="popLayout">
                 {current ? (
                   <DealCard
@@ -625,11 +704,16 @@ export const DealView: React.FC<DealViewProps> = ({
             <Pile
               label="Done"
               count={doneCards.length}
-              topCard={doneCards[doneCards.length - 1]}
-              areaById={areaById}
               tone="done"
               open={openPile === 'done'}
-              onToggle={() => setOpenPile(openPile === 'done' ? null : 'done')}
+              onToggle={() => {
+                setPileSelId(null);
+                setOpenPile(openPile === 'done' ? null : 'done');
+              }}
+              selectedId={pileSelId}
+              onSelect={(id) => setPileSelId(pileSelId === id ? null : id)}
+              faces={faces}
+              onDragging={setPileDragging}
               cards={pileCards('done')}
               suitOf={suitOf}
               onBringBack={bringBack}
@@ -739,11 +823,12 @@ const CardDetails: React.FC<{
         <h2 id="blocked-card-title" className="font-serif text-2xl font-bold leading-tight break-words">
           {card.title}
         </h2>
-        {card.description.trim() ? (
-          <p className="text-[15px] text-[#4a4840] whitespace-pre-line break-words">{card.description.trim()}</p>
-        ) : (
+        {descriptionText(card.description) ? (
+          <p className="text-[15px] text-[#4a4840] whitespace-pre-line break-words">{descriptionText(card.description)}</p>
+        ) : !extractUrls(card.description).length ? (
           <p className="text-sm text-[#8a867b] italic">No description.</p>
-        )}
+        ) : null}
+        <LinkIcons text={card.description} showHost />
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-[#4a4840] border-t border-[#e3ddcf] pt-3">
           {due.label && (<><dt className="text-[#8a867b]">Due</dt><dd className={due.isOverdue ? 'text-red-700 font-medium' : ''}>{due.label}</dd></>)}
           {card.estimateHours ? (<><dt className="text-[#8a867b]">Estimate</dt><dd>{formatHours(card.estimateHours)}</dd></>) : null}
@@ -960,15 +1045,16 @@ const DealCard: React.FC<DealCardProps> = ({
         >
           {card.title}
         </h2>
-        {card.description.trim() && (
+        {descriptionText(card.description) && (
           <p
-            className={`text-[#4a4840] whitespace-pre-line ${
+            className={`text-[#4a4840] whitespace-pre-line break-words ${
               compact ? 'mt-2 text-[13px] line-clamp-2' : 'mt-4 text-[15px] line-clamp-5'
             }`}
           >
-            {card.description.trim()}
+            {descriptionText(card.description)}
           </p>
         )}
+        <LinkIcons text={card.description} showHost={!compact} className={compact ? 'mt-2' : 'mt-3'} />
         {card.progress > 0 && (
           <div className={`${compact ? 'mt-3' : 'mt-5'} flex items-center gap-2 text-xs text-[#6b675d]`}>
             <div className="flex-1 h-1.5 rounded-full bg-[#e8e3d6] overflow-hidden">
@@ -1117,102 +1203,238 @@ const CardDress: React.FC<{ suit: Suit; face?: Face; rank: number; compact?: boo
   );
 };
 
+// ---- Small card face, used in the piles (stacked and spread out) ----
+
+const MiniCard: React.FC<{ card: CardItem; suit: Suit; face?: Face }> = ({ card, suit, face }) => {
+  const red = isRedSuit(suit);
+  const soft = red ? SUIT_RED_SOFT : SUIT_BLACK_SOFT;
+  return (
+    <span className="absolute inset-0 rounded-lg bg-[#faf7ef] text-[#1d1d1b] text-left overflow-hidden border border-black/5">
+      {red && <span aria-hidden="true" className="absolute inset-x-0 top-0 h-4 opacity-20" style={{ backgroundColor: SUIT_RED }} />}
+      <span className="absolute top-1.5 left-2 flex flex-col items-center leading-none font-serif font-bold" style={{ color: soft }}>
+        <span className="text-[13px]">{face ?? card.priority}</span>
+        <span className="text-[12px]">{suit}</span>
+      </span>
+      <span className="absolute top-2 right-2 text-[8px] font-semibold uppercase tracking-wide" style={{ color: soft }}>
+        {red ? 'Active' : 'To do'}
+      </span>
+      <span className="absolute left-2 right-2 top-10 font-serif font-bold text-[12px] leading-tight line-clamp-4 break-words">
+        {card.title}
+      </span>
+    </span>
+  );
+};
+
 // ---- A pile of played cards ----
+// Closed: the newest cards stacked face up, each one offset and turned a little so you can see there are several.
+// Open: up to SPREAD cards fan out toward the middle of the table; any others stay in the pile.
+
+const SPREAD = 5;
+const STACK_LOOK = [
+  { x: 0, y: 0, rotate: 0 },
+  { x: -5, y: 4, rotate: -6 },
+  { x: 6, y: 7, rotate: 5 },
+  { x: -3, y: 10, rotate: -10 },
+];
 
 const Pile: React.FC<{
   label: string;
   count: number;
-  topCard?: CardItem;
-  areaById: Map<string, Area>;
   tone: 'done' | 'later';
   open: boolean;
   onToggle: () => void;
   cards: CardItem[]; // newest first
   suitOf: (c: CardItem) => Suit;
-  onBringBack: (id: string) => void;
-}> = ({ label, count, topCard, areaById, tone, open, onToggle, cards, suitOf, onBringBack }) => {
+  onBringBack: (id: string, dropped?: boolean) => void;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  faces: Record<string, Face>;
+  onDragging: (dragging: boolean) => void;
+}> = ({ label, count, tone, open, onToggle, cards, suitOf, onBringBack, selectedId, onSelect, faces, onDragging }) => {
+  // A drag ends with a click on the card underneath; ignore that click
+  const justDragged = useRef(false);
+  // Counts only when dropped over the card(s) in play after a real drag (the spread can overlap the table)
+  const droppedOnTable = (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (Math.hypot(info.offset.x, info.offset.y) < 60) return false;
+    const zone = document.querySelector('[data-drop-target]')?.getBoundingClientRect();
+    const pt = 'changedTouches' in e ? e.changedTouches[0] : (e as MouseEvent);
+    return !!zone && pt.clientX >= zone.left && pt.clientX <= zone.right && pt.clientY >= zone.top && pt.clientY <= zone.bottom;
+  };
   const color = tone === 'done' ? 'text-[#7ed491]' : 'text-[#e9c46a]';
-  const layers = Math.min(count, 3);
-  const dot = topCard ? areaById.get(topCard.areaId || '')?.color : undefined;
-  const right = tone === 'done'; // the Done pile sits on the right edge of the table
+  const right = tone === 'done'; // the Done pile sits on the right, so it spreads to the left
+  const spread = open ? cards.slice(0, SPREAD) : [];
+  const stacked = cards.slice(spread.length); // what stays in the pile
+  const Back = right ? ArrowLeft : ArrowRight; // points toward the table
+
   return (
-    <div className={`flex flex-col gap-2 ${right ? 'lg:items-end' : ''}`}>
-      <button
-        onClick={onToggle}
-        disabled={count === 0}
+    <div className={`relative flex flex-col gap-4 ${right ? 'lg:items-end' : ''}`}>
+      {/* Not a <button>: the top card inside can be dragged straight to the table */}
+      <div
+        role="button"
+        tabIndex={count ? 0 : -1}
+        aria-disabled={count === 0}
         aria-expanded={open}
-        title={count ? (open ? 'Close the pile' : 'Open the pile to bring a card back') : undefined}
-        className="relative w-24 h-32 rounded-lg enabled:cursor-pointer disabled:cursor-default focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#f3efe4]/50"
+        onClick={() => count && !justDragged.current && onToggle()}
+        onKeyDown={(e) => {
+          if (count && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggle();
+          }
+        }}
+        title={
+          count
+            ? open
+              ? 'Put the cards back on the pile'
+              : 'Click to spread the pile out, or drag the top card onto the table to bring it back'
+            : undefined
+        }
+        className={`relative w-24 h-[132px] rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#f3efe4]/50 ${
+          count ? 'cursor-pointer' : 'cursor-default'
+        }`}
       >
-        {count === 0 ? (
+        {stacked.length === 0 ? (
           <div className="absolute inset-0 rounded-lg border border-dashed border-white/20" />
         ) : (
-          Array.from({ length: layers }).map((_, i) => (
-            <motion.div
-              key={`${count}-${i}`}
-              initial={i === layers - 1 ? { scale: 1.15, opacity: 0 } : false}
-              animate={{ scale: 1, opacity: open ? 0.55 : 1 }}
-              whileHover={{ y: -3 }}
-              className="absolute inset-0 rounded-lg bg-[#faf7ef] shadow-md border border-black/5"
-              style={{ rotate: (i - layers + 1) * (tone === 'done' ? 3 : -3) }}
-            >
-              {i === layers - 1 && dot && <span className="absolute top-2.5 left-2.5 w-2 h-2 rounded-full" style={{ backgroundColor: dot }} />}
-            </motion.div>
-          ))
+          // bottom of the pile first, so the newest card is drawn on top
+          stacked
+            .slice(0, STACK_LOOK.length)
+            .map((c, i) => ({ c, look: STACK_LOOK[i] }))
+            .reverse()
+            .map(({ c, look }) => {
+              const isTop = c.id === stacked[0].id;
+              return (
+                <motion.span
+                  key={c.id}
+                  layoutId={`pile-${c.id}`}
+                  className={`absolute inset-0 rounded-lg shadow-md ${isTop ? 'cursor-grab touch-none' : ''}`}
+                  initial={false}
+                  animate={{ x: right ? -look.x : look.x, y: look.y, rotate: right ? -look.rotate : look.rotate }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  // The top card can be dragged straight onto the table to bring it back
+                  {...(isTop
+                    ? {
+                        drag: true,
+                        dragSnapToOrigin: true,
+                        dragMomentum: false,
+                        whileDrag: { scale: 1.08, rotate: right ? -4 : 4, zIndex: 50, cursor: 'grabbing' },
+                        onDragStart: () => {
+                          justDragged.current = true;
+                          onDragging(true);
+                        },
+                        onDragEnd: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+                          onDragging(false);
+                          window.setTimeout(() => (justDragged.current = false), 0);
+                          if (droppedOnTable(e, info)) onBringBack(c.id, true);
+                        },
+                      }
+                    : {})}
+                >
+                  <MiniCard card={c} suit={suitOf(c)} face={faces[c.id]} />
+                </motion.span>
+              );
+            })
         )}
-      </button>
+      </div>
       <p className={`text-sm font-medium ${color}`}>
         {label} <span className="text-[#f3efe4]/70 ml-1">{count}</span>
         {count > 0 && <span className="ml-1.5 text-[11px] text-[#f3efe4]/45">{open ? '▴ close' : '▾ open'}</span>}
       </p>
 
-      {/* Fanned out: every card in the pile with its title; click one to bring it back */}
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.ul
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className={`flex flex-col gap-1.5 w-[min(250px,80vw)] overflow-hidden ${right ? 'lg:items-end' : ''}`}
-          >
-            {cards.map((c, i) => {
-              const suit = suitOf(c);
-              return (
-                <motion.li
-                  key={c.id}
-                  layout
-                  initial={{ opacity: 0, x: right ? 16 : -16, rotate: right ? 2 : -2 }}
-                  animate={{ opacity: 1, x: 0, rotate: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="w-full"
+      {/* Spread toward the middle of the table (below the pile on narrow screens). Click a card to pick it
+          (← / → move it to the other pile, Enter brings it back); hover shows an arrow to send it back. */}
+      {spread.length > 0 && (
+        <ul
+          aria-label={`${label} pile`}
+          className={`flex flex-wrap gap-3 lg:flex-nowrap lg:absolute lg:top-0 lg:z-30 ${
+            right ? 'lg:right-full lg:mr-6 lg:flex-row-reverse' : 'lg:left-full lg:ml-6'
+          }`}
+        >
+          {spread.map((c, i) => {
+            const picked = c.id === selectedId;
+            return (
+              <motion.li
+                key={c.id}
+                layoutId={`pile-${c.id}`}
+                animate={{ rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 30, delay: i * 0.04 }}
+                // Drag it onto the table to bring it back; anywhere else it springs back to the spread
+                drag
+                dragSnapToOrigin
+                dragMomentum={false}
+                whileDrag={{ scale: 1.08, rotate: right ? -4 : 4, zIndex: 50, cursor: 'grabbing' }}
+                onDragStart={() => {
+                  justDragged.current = true;
+                  onDragging(true);
+                }}
+                onDragEnd={(e, info) => {
+                  onDragging(false);
+                  window.setTimeout(() => (justDragged.current = false), 0);
+                  if (droppedOnTable(e, info)) onBringBack(c.id, true);
+                }}
+                className="group relative w-24 h-[132px] shrink-0 cursor-grab touch-none"
+              >
+                <button
+                  onClick={() => !justDragged.current && onSelect(c.id)}
+                  aria-pressed={picked}
+                  title={`${c.title} (drag onto the table to bring it back, or click to pick it, then ← / → to move it)`}
+                  className={`absolute inset-0 rounded-lg shadow-[0_10px_24px_-8px_rgba(0,0,0,0.6)] transition-transform hover:-translate-y-1 ${
+                    picked ? 'ring-2 ring-[#f3efe4] ring-offset-2 ring-offset-[#1f3a32] -translate-y-1' : ''
+                  }`}
                 >
-                  <button
-                    onClick={() => onBringBack(c.id)}
-                    title={tone === 'done' ? 'Bring back: undo Done and return it to the deal' : 'Bring back into the deal'}
-                    className="group w-full flex items-center gap-2 pl-2.5 pr-2 py-2 rounded-lg bg-[#faf7ef] text-[#1d1d1b] text-left shadow-md hover:-translate-y-0.5 transition-transform"
-                  >
-                    <span
-                      className="font-serif font-bold text-base leading-none w-4 text-center shrink-0"
-                      style={{ color: isRedSuit(suit) ? SUIT_RED_SOFT : SUIT_BLACK_SOFT }}
-                    >
-                      {suit}
-                    </span>
-                    <span className="text-sm leading-snug line-clamp-2 flex-1">{c.title}</span>
-                    <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-[#8a867b] group-hover:text-[#1d1d1b]">
-                      <Undo2 className="w-3.5 h-3.5" />
-                      <span className="hidden group-hover:inline">Bring back</span>
-                    </span>
-                  </button>
-                </motion.li>
-              );
-            })}
-          </motion.ul>
-        )}
-      </AnimatePresence>
+                  <MiniCard card={c} suit={suitOf(c)} face={faces[c.id]} />
+                </button>
+                <button
+                  onClick={() => onBringBack(c.id)}
+                  title={tone === 'done' ? 'Back to the deck (undoes Done)' : 'Back to the deck'}
+                  aria-label={`Bring ${c.title} back to the deck`}
+                  className={`absolute bottom-2 ${right ? 'left-2' : 'right-2'} w-7 h-7 rounded-full bg-[#1f3a32] text-[#f3efe4] shadow flex items-center justify-center group-hover:opacity-100 focus-visible:opacity-100 transition-opacity ${
+                    picked ? 'opacity-100' : 'opacity-0'
+                  }`}
+                >
+                  <Back className="w-4 h-4" />
+                </button>
+              </motion.li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 };
+
+// ---- 1 card / 4 up switch ----
+
+const LayoutSwitch: React.FC<{ layout: Layout; onChange: (l: Layout) => void; vertical?: boolean; className?: string }> = ({
+  layout,
+  onChange,
+  vertical,
+  className = '',
+}) => (
+  <div
+    role="group"
+    aria-label="Cards on the table"
+    className={`${vertical ? 'flex-col' : ''} flex items-stretch gap-0.5 p-0.5 rounded-lg bg-black/20 border border-white/10 ${className}`}
+  >
+    {([
+      ['single', Square, '1 card', 'Show one card at a time (F)'],
+      ['four', LayoutGrid, '4 up', 'Show four cards and pick one (F)'],
+    ] as const).map(([value, Icon, text, title]) => (
+      <button
+        key={value}
+        onClick={() => onChange(value)}
+        aria-pressed={layout === value}
+        title={title}
+        className={`flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+          layout === value ? 'bg-[#f3efe4] text-[#1f3a32]' : 'text-[#f3efe4]/70 hover:text-[#f3efe4]'
+        }`}
+      >
+        <Icon className="w-3.5 h-3.5" />
+        <span className={vertical ? '' : 'hidden sm:inline'}>{text}</span>
+      </button>
+    ))}
+  </div>
+);
 
 // ---- Direction labels either side of the card ----
 // Always visible, and light up as the card is dragged toward them.
