@@ -13,6 +13,7 @@ import {
   X,
   HelpCircle,
   Spade,
+  Grid2x2,
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -108,7 +109,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200/80 dark:border-slate-700/60 h-[34px] shrink-0">
           <button
             onClick={() => onViewModeChange('board')}
-            title="Board view (Shortcut: V)"
+            title="Board view (Shortcut: V cycles Board, List, Matrix)"
             aria-label="Switch to Board view"
             className={`flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all ${
               viewMode === 'board'
@@ -132,6 +133,20 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             <ListFilter className="w-3.5 h-3.5" />
             <span>List</span>
+          </button>
+
+          <button
+            onClick={() => onViewModeChange('matrix')}
+            title="Matrix view: drag cards by impact and timeframe (Shortcut: V)"
+            aria-label="Switch to Matrix view"
+            className={`flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all ${
+              viewMode === 'matrix'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200/60 dark:border-slate-700/60'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Grid2x2 className="w-3.5 h-3.5" />
+            <span>Matrix</span>
           </button>
 
           <button

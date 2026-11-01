@@ -29,7 +29,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
 
   const shortcuts = [
     { key: 'N', label: 'Create New Task' },
-    { key: 'V', label: 'Toggle View Mode (Board / List)' },
+    { key: 'V', label: 'Switch view (Board → List → Matrix)' },
     { key: 'D', label: 'Toggle Card Descriptions' },
     { key: 'T', label: 'Open Deal, or back to the board from Deal (in Deal: ← not now, → done, Z undo)' },
     { key: '/', label: 'Focus Search Input' },

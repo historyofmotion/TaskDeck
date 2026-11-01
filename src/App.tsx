@@ -46,6 +46,7 @@ import { OptionsModal } from './components/OptionsModal';
 import { StarLimitModal } from './components/StarLimitModal';
 import { FileSyncModal } from './components/FileSyncModal';
 import { DealView } from './components/DealView';
+import { MatrixView, QUADRANT_ORDER, matrixScore, quadrantOf } from './components/MatrixView';
 import { WorkIndicator } from './components/WorkIndicator';
 import { WORK_KEY, WorkState, formatTracked, loadWorkState, saveWorkState } from './utils/workTracking';
 import { BoardCheckError, parseBoardFile, summarizeProblems } from './utils/boardCheck';
@@ -289,7 +290,7 @@ export default function App() {
         setShowDetails((prev) => !prev);
       } else if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
-        setViewMode((prev) => (prev === 'board' ? 'list' : 'board'));
+        setViewMode((prev) => (prev === 'board' ? 'list' : prev === 'list' ? 'matrix' : 'board'));
       } else if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         setIsDealOpen(true);
@@ -701,6 +702,61 @@ export default function App() {
     />
   );
 
+  // ---- Matrix view ----
+  const handlePlaceOnMatrix = (cardId: string, pos: { x: number; y: number } | null) => {
+    updateBoardData({
+      ...boardData,
+      cards: boardData.cards.map((c) => {
+        if (c.id !== cardId) return c;
+        if (pos) return { ...c, matrix: { x: Math.round(pos.x * 1000) / 1000, y: Math.round(pos.y * 1000) / 1000 } };
+        const { matrix: _drop, ...rest } = c;
+        return rest;
+      }),
+    });
+  };
+
+  // A finished card is open again: it goes back to the To do column (clearing its completion), and is placed
+  // on the matrix if it was dropped on the grid. Works for archived cards too.
+  const handleReopenCard = (cardId: string, pos: { x: number; y: number } | null) => {
+    const target =
+      boardData.columns.find((c) => getColumnRole(c) === 'pending') ||
+      boardData.columns.find((c) => getColumnRole(c) === 'active') ||
+      boardData.columns.find((c) => getColumnRole(c) !== 'done');
+    const fromArchive = boardData.archive.find((c) => c.id === cardId);
+    const base = fromArchive || boardData.cards.find((c) => c.id === cardId);
+    if (!target || !base) return;
+    const { archivedAt: _archived, ...rest } = base;
+    const matrix = pos ? { x: Math.round(pos.x * 1000) / 1000, y: Math.round(pos.y * 1000) / 1000 } : base.matrix;
+    const reopened: CardItem = { ...rest, columnId: target.id, completedAt: null, ...(matrix ? { matrix } : {}) };
+    const cards = fromArchive
+      ? [...boardData.cards, { ...reopened, priority: boardData.cards.length + 1 }]
+      : boardData.cards.map((c) => (c.id === cardId ? reopened : c));
+    updateBoardData({
+      ...boardData,
+      cards: resortWithStarredTop(cards),
+      archive: fromArchive ? boardData.archive.filter((c) => c.id !== cardId) : boardData.archive,
+    });
+    addToast(`"${base.title}" is open again in ${target.name}.`, 'success');
+  };
+
+  // Renumber ranks from the matrix: Urgent, Important, Needed, Questionable (nearest top-right first),
+  // then unplaced open cards in their current order, then Done. Starred cards stay on top.
+  const handleUseMatrixOrder = () => {
+    const doneId = getDoneColumnId(boardData.columns);
+    const byRank = [...boardData.cards].sort((a, b) => a.priority - b.priority);
+    const open = byRank.filter((c) => c.columnId !== doneId);
+    const placed = open
+      .filter((c) => c.matrix)
+      .sort(
+        (a, b) =>
+          QUADRANT_ORDER.indexOf(quadrantOf(a.matrix!)) - QUADRANT_ORDER.indexOf(quadrantOf(b.matrix!)) ||
+          matrixScore(b.matrix!) - matrixScore(a.matrix!)
+      );
+    const ordered = [...placed, ...open.filter((c) => !c.matrix), ...byRank.filter((c) => c.columnId === doneId)];
+    updateBoardData({ ...boardData, cards: resortWithStarredTop(normalizePriorities(ordered)) });
+    addToast('Ranks updated from the matrix (starred cards stay on top).', 'success');
+  };
+
   // ---- Deal mode ----
   // Unblock a card: move it to the end of the first Active column
   const handleMakeActive = (cardId: string) => {
@@ -911,7 +967,21 @@ export default function App() {
 
       {/* Main Views */}
       <main className="flex-1 mt-1">
-        {viewMode === 'board' ? (
+        {viewMode === 'matrix' ? (
+          <MatrixView
+            cards={filteredCards}
+            archiveCards={filteredArchive}
+            columns={boardData.columns}
+            areas={boardData.areas}
+            workingCardId={work?.mode === 'working' ? work.cardId : null}
+            onPlace={handlePlaceOnMatrix}
+            onOpenCard={setEditingCard}
+            onStartWork={handleStartWork}
+            onUseMatrixOrder={handleUseMatrixOrder}
+            onReopen={handleReopenCard}
+            onOpenArchivedCard={setViewingArchivedCard}
+          />
+        ) : viewMode === 'board' ? (
           <BoardView
             columns={boardData.columns}
             cards={filteredCards}

@@ -37,6 +37,9 @@ export interface CardItem {
   archivedAt?: string | null;
   estimateHours?: number | null; // hours needed to finish; null/missing = not estimated
   trackedSeconds?: number; // working time recorded with the timer
+  // Spot on the Matrix view, 0–1 on each axis: x = timeframe (0 when possible → 1 immediate),
+  // y = impact (0 minor → 1 major). Missing = not placed yet.
+  matrix?: { x: number; y: number };
 }
 
 export interface BoardData {
@@ -48,7 +51,7 @@ export interface BoardData {
   archive: CardItem[];
 }
 
-export type ViewMode = 'board' | 'list';
+export type ViewMode = 'board' | 'list' | 'matrix';
 
 export interface ToastMessage {
   id: string;

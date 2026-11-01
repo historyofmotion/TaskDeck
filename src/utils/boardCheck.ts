@@ -92,6 +92,7 @@ export function checkBoard(raw: unknown): CheckedBoard {
   let fixedProgress = 0;
   let clearedEstimates = 0;
   let clearedTracked = 0;
+  let clearedMatrix = 0;
 
   const checkCard = (c: unknown, label: string): CardItem | null => {
     const id = isObj(c) ? nonEmpty(c.id) : null;
@@ -143,6 +144,16 @@ export function checkBoard(raw: unknown): CheckedBoard {
       }
     }
 
+    let matrix: { x: number; y: number } | null = null;
+    if (c.matrix != null) {
+      const m = c.matrix as Obj;
+      if (isObj(m) && typeof m.x === 'number' && typeof m.y === 'number' && isFinite(m.x) && isFinite(m.y)) {
+        matrix = { x: Math.min(1, Math.max(0, m.x)), y: Math.min(1, Math.max(0, m.y)) };
+      } else {
+        clearedMatrix++;
+      }
+    }
+
     return {
       id,
       title,
@@ -158,6 +169,7 @@ export function checkBoard(raw: unknown): CheckedBoard {
       ...(c.archivedAt !== undefined ? { archivedAt: isoOrNull(c.archivedAt) } : {}),
       ...(estimateHours !== null ? { estimateHours } : {}),
       ...(trackedSeconds > 0 ? { trackedSeconds } : {}),
+      ...(matrix ? { matrix } : {}),
     };
   };
 
@@ -190,6 +202,7 @@ export function checkBoard(raw: unknown): CheckedBoard {
   if (fixedProgress) fixes.push(`${plural(fixedProgress, 'progress value')} ${was(fixedProgress)} invalid and ${was(fixedProgress)} corrected`);
   if (clearedEstimates) fixes.push(`${plural(clearedEstimates, 'hour estimate')} ${was(clearedEstimates)} invalid and ${was(clearedEstimates)} cleared`);
   if (clearedTracked) fixes.push(`${plural(clearedTracked, 'tracked time')} ${was(clearedTracked)} invalid and ${was(clearedTracked)} cleared`);
+  if (clearedMatrix) fixes.push(`${plural(clearedMatrix, 'matrix position')} ${was(clearedMatrix)} invalid and ${was(clearedMatrix)} cleared`);
   if (unstarred) fixes.push(`${plural(unstarred, 'card')} unstarred to keep the ${MAX_STARS}-star limit`);
 
   // ---- Settings ----

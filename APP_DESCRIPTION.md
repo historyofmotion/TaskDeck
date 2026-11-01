@@ -24,7 +24,7 @@ A board is one object containing:
 | `archive` | Archived tasks: the same fields plus `archivedAt`. |
 | `settings` | Auto-archive days, theme, app icon. |
 
-Card fields: `id`, `title` (required), `description`, `areaId` (or none), `columnId`, `priority`, `starred`, `progress` (0–100), `dueDate` (YYYY-MM-DD or none), `createdAt`, `completedAt`, `archivedAt` (archive only), `estimateHours` (hours needed to finish; optional, greater than 0), `trackedSeconds` (working time recorded by the timer; optional).
+Card fields: `id`, `title` (required), `description`, `areaId` (or none), `columnId`, `priority`, `starred`, `progress` (0–100), `dueDate` (YYYY-MM-DD or none), `createdAt`, `completedAt`, `archivedAt` (archive only), `estimateHours` (hours needed to finish; optional, greater than 0), `trackedSeconds` (working time recorded by the timer; optional), `matrix` (`{x, y}` from 0 to 1: the card's spot on the Matrix view; optional).
 
 - **DATA-1** A new board has the columns Pending, In Progress, Blocked and Done (types pending, active, blocked, done), the projects Work, Personal, Admin and Errands, and 3 sample cards.
 - **DATA-2** A column's behaviour comes from its **type**, never its name. Renaming a column must not change auto-archive, completion dates, overdue checks, the Focus bar or renumbering.
@@ -91,7 +91,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 
 ## 7. Top bar and Focus bar
 
-- **TOP-1** The top bar has: app icon and name (click to copy the board as text), Board/List switch, Deal button (section 7.1), details toggle, search, project filter, New card, Options and Help.
+- **TOP-1** The top bar has: app icon and name (click to copy the board as text), Board/List/Matrix switch, Deal button (section 7.1), details toggle, search, project filter, New card, Options and Help.
 - **TOP-2** Search matches card title, description or project name, and is case-insensitive.
 - **TOP-3** The project filter offers All, No project, or a single project.
 - **TOP-4** Search and the filter apply to the board, the list, the archive lists and Deal.
@@ -146,6 +146,17 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 - **WORK-9** Several TaskDeck tabs in the same browser share one timer: when one tab starts, switches or stops it, the others follow straight away.
 - **Limit WORK-L1** The timer is per browser (tabs share it): another browser or device using the same board.json doesn't see it.
 
+### 7.3 Matrix
+
+- **MATRIX-1** The Matrix view is a square 2×2 grid, so each quadrant is a square. The vertical axis is Impact (Major at the top, Minor at the bottom, with an upward arrow); the horizontal axis is Timeframe (When possible on the left, Immediate on the right).
+- **MATRIX-2** The quadrants are Important (top left, blue), Urgent (top right, green), Needed (bottom right, yellow) and Questionable (bottom left, neutral), each with a short description.
+- **MATRIX-3** Open cards (Active, Pending, Blocked; after search and filter) appear as small pills. A card is placed by dragging it anywhere on the grid; its spot is saved on the card (`matrix`) and kept until moved. While dragging, only the quadrant it would land in is highlighted. Dragging it back to the "Not placed yet" tray removes its spot. Cards with no spot wait in that tray, in progress first, then blocked, then pending (each in rank order).
+- **MATRIX-4** Pills show the state: Pending is a plain pill with a project-coloured ring; In progress has a green play badge and green border (the badge pings while its timer runs); Blocked has a dashed red border, a block icon and struck-through text. Starred cards show a star. A legend sits under the grid.
+- **MATRIX-5** The side panel shows the Urgent corner's total estimated hours and card count (and how many have no estimate), and lists its cards nearest the top-right corner first.
+- **MATRIX-6** Clicking a pill shows its details in the side panel (project, state, quadrant, title, description, link icons, tracked time, estimate, due date) with Edit and Start (timer) buttons; double-clicking opens the full editor.
+- **MATRIX-7** "Use matrix order for ranks" renumbers the board: Urgent, Important, Needed, Questionable, nearest the top-right first within each; then unplaced open cards in their current order; then Done. Starred cards still stay on top. The matrix never changes ranks on its own.
+- **MATRIX-8** Done cards aren't on the grid. Cards completed in the last 7 days (including archived ones) are listed at the bottom of the side panel under "Done in the last 7 days", up to 6, as pills. Dragging one onto the grid (or the tray) must reopen it: it moves to the first To do (Pending) column, its completion is cleared, an archived card returns to the board, and it is placed where it was dropped. Clicking one shows its details with a "Not done" button that reopens it the same way (back at its old spot, or in the tray if it had none).
+
 ## 8. Card editor
 
 - **EDIT-1** Also shows tracked time next to the estimate, and a Start working / Stop timer button for cards not in Done. Fields: Title (required), Project, Due date, Column/Status, Progress (slider 0–100), Estimate (hours, steps of 0.25, with quick picks 15m–8h; empty means not estimated), Description, Star.
@@ -189,6 +200,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
   - a progress value that isn't a number or is outside 0–100 is corrected;
   - an hour estimate that isn't a number above 0 is cleared (values above 1000 are capped);
   - tracked time that isn't a number of 0 or more is cleared;
+  - a matrix spot that isn't two numbers is cleared (numbers outside 0–1 are pulled in);
   - stars beyond 3 are removed.
 - **CHECK-4** Missing optional fields get defaults: empty description, no project, 0% progress, the current time for `createdAt`, the default columns or projects if those lists are missing, and the default settings.
 - **CHECK-5** The file's own ranking is kept (cards are sorted by their `priority` value), then renumbered 1…N.
@@ -218,7 +230,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 | Key | Action |
 |---|---|
 | N | New card |
-| V | Switch Board / List |
+| V | Switch view: Board → List → Matrix |
 | D | Show or hide descriptions |
 | T | Open Deal; in Deal, back to the board |
 | ← / → / Z (in Deal) | Not now / Done / Undo |
