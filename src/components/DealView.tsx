@@ -569,12 +569,6 @@ export const DealView: React.FC<DealViewProps> = ({
                 pileDragging ? 'outline-[#f3efe4]/45' : 'outline-transparent'
               }`}
             >
-              <LayoutSwitch
-                layout={layout}
-                onChange={setLayout}
-                vertical
-                className="hidden lg:flex absolute left-full bottom-0 ml-5 z-10"
-              />
               {pileDragging && (
                 <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap px-3 py-1 rounded-full bg-[#f3efe4] text-[#1f3a32] text-xs font-semibold shadow">
                   Drop here to bring it back
@@ -585,7 +579,9 @@ export const DealView: React.FC<DealViewProps> = ({
             )}
             {isFour ? (
               current ? (
-                <div data-drop-target className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)]">
+                <div key="four-up" data-drop-target className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)] animate-in fade-in duration-150">
+                  <LayoutSwitch layout={layout} onChange={setLayout} vertical className="hidden lg:flex absolute left-full bottom-0 ml-3 z-10" />
+
                   <AnimatePresence initial={false} custom={{ ...motionDir, compact: true }}>
                     {faceUp.map((c, i) => (
                       <DealCard
@@ -616,7 +612,9 @@ export const DealView: React.FC<DealViewProps> = ({
                 endPanel
               )
             ) : (
-            <div data-drop-target className="relative w-[min(88vw,420px)] h-[min(70vh,520px)]">
+            <div key="one-up" data-drop-target className="relative w-[min(88vw,420px)] h-[min(70vh,520px)] animate-in fade-in duration-150">
+              <LayoutSwitch layout={layout} onChange={setLayout} vertical className="hidden lg:flex absolute left-full bottom-0 ml-3 z-10" />
+
               <AnimatePresence initial={false} custom={motionDir} mode="popLayout">
                 {current ? (
                   <DealCard
