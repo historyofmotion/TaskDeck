@@ -294,7 +294,7 @@ export default function App() {
       if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync) {
         return;
       }
-      if (isDealOpen && e.key !== 'v' && e.key !== 'V') return; // Deal has its own keys, except V which leaves it
+      if (isDealOpen && !'vVmM'.includes(e.key)) return; // Deal has its own keys, except V and M which leave it
 
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();

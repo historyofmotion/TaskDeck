@@ -1,6 +1,6 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, PanInfo } from 'motion/react';
-import { ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, ListOrdered, Pencil, Play, Star, Undo2 } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { animate, AnimatePresence, motion, PanInfo, useMotionValue } from 'motion/react';
+import { ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, ListOrdered, Pencil, Play, Star, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Area, CardItem, Column, ColumnRole } from '../types';
 import { extractUrls, formatDueDateLabel, formatHours, getColumnRole } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
@@ -55,6 +55,14 @@ const QUADRANTS: Record<Quadrant, { name: string; sub: string; corner: string; t
   },
 };
 
+// Where each quadrant starts on the 0–1 scale (each spans half of each axis)
+const ORIGIN: Record<Quadrant, Point> = {
+  important: { x: 0, y: 0.5 },
+  urgent: { x: 0.5, y: 0.5 },
+  needed: { x: 0.5, y: 0 },
+  questionable: { x: 0, y: 0 },
+};
+
 const ROLE_ORDER: Record<string, number> = { active: 0, blocked: 1, pending: 2 };
 
 const RECENT_DAYS = 7;
@@ -92,6 +100,16 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   // What a dragged card would land in right now: a quadrant, the tray, or nothing
   const [hover, setHover] = useState<Quadrant | 'tray' | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
+  // One quadrant blown up to fill the whole grid, for finer placement
+  const [zoom, setZoom] = useState<Quadrant | null>(null);
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoom(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoom]);
 
   const areaById = useMemo(() => new Map(areas.map((a) => [a.id, a])), [areas]);
   const roleOf = useMemo(() => {
@@ -131,10 +149,10 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
       // closest the circle can get while the whole pill stays inside the grid
       const mx = 16 / g.width;
       const my = 16 / g.height;
-      return {
-        x: Math.min(1 - mx, Math.max(mx, (dot.x - g.left) / g.width)),
-        y: Math.min(1 - my, Math.max(my, 1 - (dot.y - g.top) / g.height)),
-      };
+      const vx = Math.min(1 - mx, Math.max(mx, (dot.x - g.left) / g.width));
+      const vy = Math.min(1 - my, Math.max(my, 1 - (dot.y - g.top) / g.height));
+      // zoomed in, the grid shows just one quadrant (half of each axis)
+      return zoom ? { x: ORIGIN[zoom].x + vx * 0.5, y: ORIGIN[zoom].y + vy * 0.5 } : { x: vx, y: vy };
     }
     const t = trayRef.current?.getBoundingClientRect();
     if (t && pt.clientX >= t.left && pt.clientX <= t.right && pt.clientY >= t.top && pt.clientY <= t.bottom) return 'tray';
@@ -147,20 +165,27 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
     setHover(spot === 'tray' ? 'tray' : spot ? quadrantOf(spot) : null);
   };
 
-  const handleDrop = (card: CardItem, e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => {
+  // Returns true if the card was moved (the pill then re-appears at its new spot), false if it should slide back
+  const handleDrop = (card: CardItem, e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point): boolean => {
     setHover(null);
-    if (Math.hypot(info.offset.x, info.offset.y) < 4) return; // a click, not a move
+    if (Math.hypot(info.offset.x, info.offset.y) < 4) return false; // a click, not a move
     const spot = locate(e, dot);
     const isDone = roleOf(card) === 'done' || archiveIds.has(card.id);
+    setSelectedId(card.id);
     if (isDone) {
       // A finished card dragged back onto the grid (or the tray) is open again
-      if (spot) onReopen(card.id, spot === 'tray' ? null : spot);
-    } else if (spot === 'tray') {
-      if (card.matrix) onPlace(card.id, null);
-    } else if (spot) {
-      onPlace(card.id, spot);
+      if (!spot) return false;
+      onReopen(card.id, spot === 'tray' ? null : spot);
+      return true;
     }
-    setSelectedId(card.id);
+    if (spot === 'tray') {
+      if (!card.matrix) return false;
+      onPlace(card.id, null);
+      return true;
+    }
+    if (!spot) return false;
+    onPlace(card.id, spot);
+    return true;
   };
 
   const chipProps = (c: CardItem) => ({
@@ -182,33 +207,51 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         <div className="flex">
           {/* vertical axis */}
           <div className="w-6 shrink-0 flex flex-col items-center justify-between py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 select-none">
-            <span className="[writing-mode:vertical-rl] rotate-180">Major</span>
+            <span className="[writing-mode:vertical-rl] rotate-180">{zoom && ORIGIN[zoom].y < 0.5 ? 'Middle' : 'Major'}</span>
             <span className="flex flex-col items-center gap-1">
               <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
               <span className="[writing-mode:vertical-rl] rotate-180 tracking-[0.2em]">Impact</span>
             </span>
-            <span className="[writing-mode:vertical-rl] rotate-180">Minor</span>
+            <span className="[writing-mode:vertical-rl] rotate-180">{zoom && ORIGIN[zoom].y >= 0.5 ? 'Middle' : 'Minor'}</span>
           </div>
 
           <div
             ref={gridRef}
             className="relative flex-1 min-w-0 self-start aspect-square rounded-xl border border-slate-200 dark:border-slate-800 grid grid-cols-2 grid-rows-2"
           >
-            {(['important', 'urgent', 'questionable', 'needed'] as Quadrant[]).map((q) => (
-              <div key={q} className={`relative transition-colors ${hover === q ? `${QUADRANTS[q].lit} ring-2 ring-inset z-[5]` : QUADRANTS[q].tint} ${
-                { important: 'rounded-tl-xl', urgent: 'rounded-tr-xl', questionable: 'rounded-bl-xl', needed: 'rounded-br-xl' }[q]
-              } border-slate-200/80 dark:border-slate-800 ${q === 'important' || q === 'questionable' ? 'border-r' : ''} ${q === 'important' || q === 'urgent' ? 'border-b' : ''}`}>
-                <div className={`absolute ${QUADRANTS[q].corner} pointer-events-none select-none`}>
-                  <p className={`text-xs font-bold ${QUADRANTS[q].text}`}>{QUADRANTS[q].name}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[180px] leading-tight">{QUADRANTS[q].sub}</p>
+            {(zoom ? [zoom] : (['important', 'urgent', 'questionable', 'needed'] as Quadrant[])).map((q) => (
+              <div key={q} className={`relative transition-colors ${zoom ? 'col-span-2 row-span-2 rounded-xl' : { important: 'rounded-tl-xl', urgent: 'rounded-tr-xl', questionable: 'rounded-bl-xl', needed: 'rounded-br-xl' }[q]} ${hover === q ? `${QUADRANTS[q].lit} ring-2 ring-inset z-[5]` : QUADRANTS[q].tint
+              } border-slate-200/80 dark:border-slate-800 ${!zoom && (q === 'important' || q === 'questionable') ? 'border-r' : ''} ${!zoom && (q === 'important' || q === 'urgent') ? 'border-b' : ''}`}>
+                <div className={`absolute ${QUADRANTS[q].corner} select-none z-20`}>
+                  <p className={`text-xs font-bold flex items-center gap-1 ${QUADRANTS[q].text} ${QUADRANTS[q].corner.includes('text-right') ? 'flex-row-reverse' : ''}`}>
+                    {QUADRANTS[q].name}
+                    <button
+                      onClick={() => setZoom(zoom ? null : q)}
+                      title={zoom ? 'Back to all four quadrants (Esc)' : `Zoom in on ${QUADRANTS[q].name} to place cards more precisely`}
+                      aria-label={zoom ? 'Show all four quadrants' : `Zoom in on ${QUADRANTS[q].name}`}
+                      className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      {zoom ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
+                    </button>
+                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[180px] leading-tight pointer-events-none">
+                    {zoom ? `Zoomed in · ${QUADRANTS[q].sub}` : QUADRANTS[q].sub}
+                  </p>
                 </div>
               </div>
             ))}
 
             {/* placed cards: the circle sits exactly on the spot; the title runs right, or left near the right edge */}
-            {placed.map((c) => (
-              <PlacedChip key={`${c.id}:${c.matrix!.x}:${c.matrix!.y}`} card={c} chip={chipProps(c)} />
-            ))}
+            {placed
+              .filter((c) => !zoom || quadrantOf(c.matrix!) === zoom)
+              .map((c) => (
+                <PlacedChip
+                  key={`${c.id}:${c.matrix!.x}:${c.matrix!.y}:${zoom || ''}`}
+                  card={c}
+                  pos={zoom ? { x: (c.matrix!.x - ORIGIN[zoom].x) * 2, y: (c.matrix!.y - ORIGIN[zoom].y) * 2 } : c.matrix!}
+                  chip={chipProps(c)}
+                />
+              ))}
 
             {placed.length === 0 && (
               <p className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 pointer-events-none">
@@ -220,9 +263,9 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
 
         {/* horizontal axis */}
         <div className="ml-6 mt-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400 select-none">
-          <span>When possible</span>
+          <span>{zoom && ORIGIN[zoom].x >= 0.5 ? 'Middle' : 'When possible'}</span>
           <span className="tracking-[0.2em]">Timeframe →</span>
-          <span>Immediate</span>
+          <span>{zoom && ORIGIN[zoom].x < 0.5 ? 'Middle' : 'Immediate'}</span>
         </div>
 
         {/* tray of cards not placed yet (drop a card here to take it off the grid) */}
@@ -377,11 +420,13 @@ type Point = { x: number; y: number };
 // when it would pass the right edge of the grid, so the whole pill stays inside.
 const PlacedChip: React.FC<{
   card: CardItem;
-  chip: Omit<React.ComponentProps<typeof Chip>, 'flip'>;
-}> = ({ card, chip }) => {
+  pos: Point; // where it is on the grid being shown (0–1 on each axis)
+  chip: Omit<React.ComponentProps<typeof Chip>, 'flip' | 'onDragging'>;
+}> = ({ card, pos, chip }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [flip, setFlip] = useState(false);
-  const m = card.matrix!;
+  const [lifted, setLifted] = useState(false); // being dragged: sit above the other pills
+  const m = pos;
   useLayoutEffect(() => {
     const measure = () => {
       const el = wrapRef.current;
@@ -397,14 +442,15 @@ const PlacedChip: React.FC<{
   return (
     <div
       ref={wrapRef}
-      className="absolute z-10 w-max max-w-[190px]"
+      className={`absolute w-max max-w-[190px] ${lifted ? 'z-50' : chip.selected ? 'z-40' : 'z-10'}`}
       style={{
-        left: `${m.x * 100}%`,
-        top: `${(1 - m.y) * 100}%`,
+        // never closer than a pill's half-height / circle offset to an edge (cards on a quadrant's border sit just inside it)
+        left: `clamp(${DOT_OFFSET}px, ${m.x * 100}%, calc(100% - ${DOT_OFFSET}px))`,
+        top: `clamp(14px, ${(1 - m.y) * 100}%, calc(100% - 14px))`,
         transform: flip ? `translate(calc(-100% + ${DOT_OFFSET}px), -50%)` : `translate(-${DOT_OFFSET}px, -50%)`,
       }}
     >
-      <Chip {...chip} flip={flip} />
+      <Chip {...chip} flip={flip} onDragging={setLifted} />
     </div>
   );
 };
@@ -422,10 +468,21 @@ const Chip: React.FC<{
   onSelect: () => void;
   onOpen: () => void;
   flip?: boolean; // circle on the right, title to its left
+  onDragging?: (dragging: boolean) => void;
   onDragMove: (e: MouseEvent | TouchEvent | PointerEvent, dot: Point) => void;
-  onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => void;
-}> = ({ card, role, area, selected, working, flip, onSelect, onOpen, onDragMove, onDrop }) => {
+  onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => boolean;
+}> = ({ card, role, area, selected, working, flip, onDragging, onSelect, onOpen, onDragMove, onDrop }) => {
   const dotRef = useRef<HTMLSpanElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const [dragging, setDragging] = useState(false);
+  // The circle's spot is where it was when you pressed, plus how far the pointer has moved since
+  const startDot = useRef<Point>({ x: -1, y: -1 });
+  const startPointer = useRef<Point>({ x: 0, y: 0 });
+  const moved = (e: MouseEvent | TouchEvent | PointerEvent): Point => {
+    const pt = 'changedTouches' in e ? e.changedTouches[0] : (e as MouseEvent);
+    return { x: startDot.current.x + pt.clientX - startPointer.current.x, y: startDot.current.y + pt.clientY - startPointer.current.y };
+  };
   const dotCentre = (): Point => {
     const r = dotRef.current?.getBoundingClientRect();
     return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: -1, y: -1 };
@@ -437,11 +494,28 @@ const Chip: React.FC<{
     <motion.button
       drag
       dragMomentum={false}
-      dragSnapToOrigin
       dragElastic={0}
-      whileDrag={{ zIndex: 50, cursor: 'grabbing', boxShadow: '0 8px 18px rgba(15,23,42,0.25)' }}
-      onDrag={(e) => onDragMove(e, dotCentre())}
-      onDragEnd={(e, info) => onDrop(e, info, dotCentre())}
+      whileDrag={{ zIndex: 50, cursor: 'grabbing', opacity: 0.7, boxShadow: '0 8px 18px rgba(15,23,42,0.18)' }}
+      style={{ x, y }}
+      onDragStart={() => {
+        setDragging(true);
+        onDragging?.(true);
+      }}
+      onPointerDown={(e) => {
+        startDot.current = dotCentre();
+        startPointer.current = { x: e.clientX, y: e.clientY };
+      }}
+      onDrag={(e) => onDragMove(e, moved(e))}
+      onDragEnd={(e, info) => {
+        setDragging(false);
+        onDragging?.(false);
+        // A moved card stays exactly where it was dropped until it re-appears at its saved spot (no hop back);
+        // a card that wasn't moved slides home.
+        if (!onDrop(e, info, moved(e))) {
+          animate(x, 0, { duration: 0.18 });
+          animate(y, 0, { duration: 0.18 });
+        }
+      }}
       onTap={onSelect}
       onDoubleClick={onOpen}
       title={`${card.title}${blocked ? ' (blocked)' : active ? ' (in progress)' : done ? ' (done)' : ''}`}
@@ -455,7 +529,7 @@ const Chip: React.FC<{
           : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
       } ${selected ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-950' : ''}`}
     >
-      <span ref={dotRef} className="flex w-4 h-4 shrink-0">
+      <span ref={dotRef} className={`flex w-4 h-4 shrink-0 transition-opacity ${dragging ? 'opacity-40' : ''}`}>
         {done ? (
           <Check className="w-4 h-4 text-emerald-500 shrink-0" />
         ) : blocked ? (
