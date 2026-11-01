@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig, MotionValue, motion, useMotionValue, useTransform, PanInfo } from 'motion/react';
-import { ArrowLeft, ArrowRight, Ban, Check, Clock, Pencil, Info, LayoutGrid, Play, Square, Star, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Ban, Check, Clock, Crown, Pencil, Info, LayoutGrid, Play, Square, Star, Undo2, X } from 'lucide-react';
 import { Area, CardItem, Column } from '../types';
 import { formatDueDateLabel, formatHours, getColumnRole, getDoneColumnId } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
@@ -65,6 +65,30 @@ function buildDeck(cards: CardItem[], columns: Column[], skip: Set<string>): str
   return [...pick('active'), ...pick('pending')].slice(0, DECK_SIZE).map((c) => c.id);
 }
 
+// ---- Playing-card looks ----
+// Active cards are red suits (♥ ♦), Pending cards black suits (♠ ♣). Which of the two is picked from the
+// card's id, so it looks random but a card always keeps its suit. The first two cards of a deal are
+// face cards (K, Q); the rest show their priority rank as their number.
+type Suit = '♥' | '♦' | '♠' | '♣';
+type Face = 'K' | 'Q';
+const SUIT_RED = '#b3261e';
+const SUIT_BLACK = '#1d1d1b';
+// Softer versions for the corner indices, so they're large but not loud
+const SUIT_RED_SOFT = '#c97a72';
+const SUIT_BLACK_SOFT = '#7a766d';
+const idHash = (id: string) => [...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+const suitFor = (card: CardItem, role: string | undefined): Suit => {
+  const pick = idHash(card.id) % 2;
+  return role === 'active' ? (pick ? '♥' : '♦') : pick ? '♠' : '♣';
+};
+const isRedSuit = (s: Suit) => s === '♥' || s === '♦';
+const faceMap = (ids: string[]): Record<string, Face> => {
+  const faces: Record<string, Face> = {};
+  if (ids[0]) faces[ids[0]] = 'K';
+  if (ids[1]) faces[ids[1]] = 'Q';
+  return faces;
+};
+
 const sumHours = (cards: (CardItem | undefined)[]) =>
   cards.reduce((t, c) => t + (c?.estimateHours || 0), 0);
 
@@ -88,9 +112,14 @@ export const DealView: React.FC<DealViewProps> = ({
   const areaById = useMemo(() => new Map(areas.map((a) => [a.id, a])), [areas]);
   const columnById = useMemo(() => new Map(columns.map((c) => [c.id, c])), [columns]);
   const canFinish = getDoneColumnId(columns) !== null;
+  const suitOf = (c: CardItem) => {
+    const col = columnById.get(c.columnId);
+    return suitFor(c, col && getColumnRole(col));
+  };
   const dragX = useMotionValue(0); // how far the card in play is dragged, for the side labels
 
   const [deck, setDeck] = useState<string[]>(() => buildDeck(cards, columns, new Set()));
+  const [faces, setFaces] = useState<Record<string, Face>>(() => faceMap(deck));
   const [dealSize, setDealSize] = useState(deck.length);
   const [plays, setPlays] = useState<Play[]>([]);
   // Which way the current card leaves (or, after Undo, comes back from): 1 = right, -1 = left
@@ -104,6 +133,8 @@ export const DealView: React.FC<DealViewProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pos, setPos] = useState(0); // index in the deck of the first face-up card (moved by the scrub bar)
   const [openBlockedId, setOpenBlockedId] = useState<string | null>(null);
+  const [openDeckId, setOpenDeckId] = useState<string | null>(null);
+  const [openPile, setOpenPile] = useState<Result | null>(null); // a pile fanned out to show its cards // a "Still in the deck" card's details
 
   // Plays from earlier deals in this session, so "Deal again" doesn't repeat set-aside cards
   const seenRef = useRef<Set<string>>(new Set());
@@ -128,6 +159,19 @@ export const DealView: React.FC<DealViewProps> = ({
     .filter((c) => columnById.get(c.columnId) && getColumnRole(columnById.get(c.columnId)!) === 'blocked')
     .sort((a, b) => a.priority - b.priority);
   const openBlocked = blockedCards.find((c) => c.id === openBlockedId);
+  const openDeck = liveDeck.find((c) => c.id === openDeckId);
+
+  // "Play it now" from the deck list: bring that card into view (and select it in 4 up).
+  // Like scrubbing, this doesn't change the deck's order.
+  const playNow = (id: string) => {
+    setOpenDeckId(null);
+    const i = liveDeck.findIndex((c) => c.id === id);
+    if (i < 0) return;
+    const nextStart = Math.max(0, Math.min(i, liveDeck.length - faceCount));
+    setMotionDir({ dir: nextStart >= start ? 1 : -1, undo: false, scrub: true });
+    setPos(nextStart);
+    setSelectedId(id);
+  };
   const canMakeActive = !!onMakeActive && columns.some((c) => getColumnRole(c) === 'active');
 
   // Unblock: move it to the Active column and put it at the front of this deal
@@ -161,6 +205,26 @@ export const DealView: React.FC<DealViewProps> = ({
     },
     [target, canFinish, onDone]
   );
+
+  // Take any card back out of a pile (an undo for that one card). From Done it returns to its column and rank.
+  const bringBack = (id: string) => {
+    const played = plays.find((p) => p.id === id);
+    if (!played) return;
+    setMotionDir({ dir: played.result === 'done' ? 1 : -1, undo: true });
+    setPlays((p) => p.filter((x) => x.id !== id));
+    setDeck((d) => [id, ...d.filter((x) => x !== id)]);
+    setPos(0);
+    setSelectedId(id);
+    if (played.result === 'done' && played.before) onUndoDone(played.before);
+    if (plays.filter((p) => p.result === played.result).length <= 1) setOpenPile(null);
+  };
+  // Cards in each pile, newest first, as they looked when played
+  const pileCards = (result: Result) =>
+    plays
+      .filter((p) => p.result === result)
+      .map((p) => (result === 'done' ? p.before : cardById.get(p.id)))
+      .filter((c): c is CardItem => !!c)
+      .reverse();
 
   const undo = useCallback(() => {
     const last = plays[plays.length - 1];
@@ -196,6 +260,7 @@ export const DealView: React.FC<DealViewProps> = ({
     setPos(0);
     setDeck(next);
     setDealSize(next.length);
+    setFaces(faceMap(next));
   };
 
   // Keyboard: → done, ← not now, Z / Backspace / Cmd+Z undo, Esc back to the board
@@ -205,10 +270,16 @@ export const DealView: React.FC<DealViewProps> = ({
       const el = document.activeElement;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
       // A blocked card's details are open: Esc closes them (it stays blocked), other keys do nothing
-      if (openBlockedId) {
+      if (openPile && e.key === 'Escape') {
+        e.preventDefault();
+        setOpenPile(null);
+        return;
+      }
+      if (openBlockedId || openDeckId) {
         if (e.key === 'Escape') {
           e.preventDefault();
           setOpenBlockedId(null);
+          setOpenDeckId(null);
         }
         return;
       }
@@ -235,7 +306,7 @@ export const DealView: React.FC<DealViewProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [play, undo, onClose, isFour, faceUp, openBlockedId, paused]);
+  }, [play, undo, onClose, isFour, faceUp, openBlockedId, openDeckId, openPile, paused]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -349,16 +420,39 @@ export const DealView: React.FC<DealViewProps> = ({
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-8 items-center px-4 sm:px-8 py-8">
           {/* Left: Not now pile + what's still in the deck */}
           <div className="order-2 lg:order-1 flex flex-col gap-8 lg:justify-self-start w-full max-w-sm">
-            <Pile label="Not now" count={laterCards.length} topCard={laterCards[laterCards.length - 1]} areaById={areaById} tone="later" />
+            <Pile
+              label="Not now"
+              count={laterCards.length}
+              topCard={laterCards[laterCards.length - 1]}
+              areaById={areaById}
+              tone="later"
+              open={openPile === 'later'}
+              onToggle={() => setOpenPile(openPile === 'later' ? null : 'later')}
+              cards={pileCards('later')}
+              suitOf={suitOf}
+              onBringBack={bringBack}
+            />
             {upNext.length > 0 && (
               <div>
                 <p className="text-sm text-[#f3efe4]/70 mb-2">Still in the deck</p>
                 <ul>
                   {upNext.slice(0, 3).map((c) => (
-                    <li key={c.id} className="flex items-center gap-2.5 py-2.5 border-b border-white/10 text-sm">
+                    <li key={c.id} className="border-b border-white/10">
+                      <button
+                        onClick={() => setOpenDeckId(c.id)}
+                        title="Show details"
+                        className="w-full flex items-center gap-2.5 py-2.5 px-1 -mx-1 text-sm text-left rounded-md hover:bg-white/5"
+                      >
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: areaById.get(c.areaId || '')?.color || '#8a9a94' }} />
                       <span className="truncate">{c.title}</span>
                       <span className="ml-auto text-xs text-[#f3efe4]/60 shrink-0">{formatHours(c.estimateHours) || '—'}</span>
+                      <span
+                        className={`w-4 text-center shrink-0 ${isRedSuit(suitOf(c)) ? 'text-[#f08a80]' : 'text-[#f3efe4]/80'}`}
+                        title={isRedSuit(suitOf(c)) ? 'Active' : 'Pending'}
+                      >
+                        {suitOf(c)}
+                      </span>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -424,6 +518,8 @@ export const DealView: React.FC<DealViewProps> = ({
                         card={c}
                         area={areaById.get(c.areaId || '')}
                         columnName={columnById.get(c.columnId)?.name || ''}
+                        suit={suitOf(c)}
+                        face={faces[c.id]}
                         canFinish={canFinish}
                         motionDir={motionDir}
                         dragX={dragX}
@@ -449,6 +545,8 @@ export const DealView: React.FC<DealViewProps> = ({
                     card={current}
                     area={areaById.get(current.areaId || '')}
                     columnName={columnById.get(current.columnId)?.name || ''}
+                    suit={suitOf(current)}
+                    face={faces[current.id]}
                     canFinish={canFinish}
                     motionDir={motionDir}
                     dragX={dragX}
@@ -524,7 +622,18 @@ export const DealView: React.FC<DealViewProps> = ({
 
           {/* Right: Done pile + hours */}
           <div className="order-3 flex flex-col gap-6 lg:justify-self-end w-full max-w-sm lg:items-end lg:text-right">
-            <Pile label="Done" count={doneCards.length} topCard={doneCards[doneCards.length - 1]} areaById={areaById} tone="done" />
+            <Pile
+              label="Done"
+              count={doneCards.length}
+              topCard={doneCards[doneCards.length - 1]}
+              areaById={areaById}
+              tone="done"
+              open={openPile === 'done'}
+              onToggle={() => setOpenPile(openPile === 'done' ? null : 'done')}
+              cards={pileCards('done')}
+              suitOf={suitOf}
+              onBringBack={bringBack}
+            />
             <div>
               <p className="text-5xl font-light tracking-tight leading-none tabular-nums">{formatHours(hoursCleared) || '0h'}</p>
               <p className="text-sm text-[#f3efe4]/70 mt-1">cleared so far</p>
@@ -541,13 +650,45 @@ export const DealView: React.FC<DealViewProps> = ({
         {/* A blocked card's details */}
         <AnimatePresence>
           {openBlocked && (
-            <BlockedDetails
+            <CardDetails
               key={openBlocked.id}
               card={openBlocked}
               area={areaById.get(openBlocked.areaId || '')}
-              canMakeActive={canMakeActive}
-              onMakeActive={() => makeActive(openBlocked.id)}
+              badge={
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e07a5f]/15 text-[#b24a30] text-xs font-semibold">
+                  <Ban className="w-3 h-3" />
+                  Blocked · #{openBlocked.priority}
+                </span>
+              }
+              closeLabel="Keep blocked"
+              actionLabel="Make active"
+              actionTitle={canMakeActive ? 'Move to your Active column and deal it now' : 'No column has type Active'}
+              actionDisabled={!canMakeActive}
+              onAction={() => makeActive(openBlocked.id)}
               onClose={() => setOpenBlockedId(null)}
+            />
+          )}
+          {openDeck && (
+            <CardDetails
+              key={openDeck.id}
+              card={openDeck}
+              area={areaById.get(openDeck.areaId || '')}
+              badge={
+                <span
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                  style={{
+                    color: isRedSuit(suitOf(openDeck)) ? SUIT_RED : SUIT_BLACK,
+                    backgroundColor: isRedSuit(suitOf(openDeck)) ? '#b3261e1a' : '#1d1d1b12',
+                  }}
+                >
+                  {suitOf(openDeck)} {columnById.get(openDeck.columnId)?.name} · #{openDeck.priority}
+                </span>
+              }
+              closeLabel="Close"
+              actionLabel="Play it now"
+              actionTitle="Make this the card in play"
+              onAction={() => playNow(openDeck.id)}
+              onClose={() => setOpenDeckId(null)}
             />
           )}
         </AnimatePresence>
@@ -556,15 +697,19 @@ export const DealView: React.FC<DealViewProps> = ({
   );
 };
 
-// ---- Details of a blocked card: make it active again, or close (it stays blocked) ----
+// ---- A card's details, with one action (blocked: Make active; in the deck: Play it now) ----
 
-const BlockedDetails: React.FC<{
+const CardDetails: React.FC<{
   card: CardItem;
   area?: Area;
-  canMakeActive: boolean;
-  onMakeActive: () => void;
+  badge: React.ReactNode; // top-right label, e.g. "Blocked · #5"
+  closeLabel: string;
+  actionLabel: string;
+  actionTitle?: string;
+  actionDisabled?: boolean;
+  onAction: () => void;
   onClose: () => void;
-}> = ({ card, area, canMakeActive, onMakeActive, onClose }) => {
+}> = ({ card, area, badge, closeLabel, actionLabel, actionTitle, actionDisabled, onAction, onClose }) => {
   const due = formatDueDateLabel(card.dueDate);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
@@ -589,10 +734,7 @@ const BlockedDetails: React.FC<{
         <div className="flex items-center gap-2 text-sm text-[#55524a]">
           {area && <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: area.color }} />}
           <span>{area?.name || 'No project'}</span>
-          <span className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e07a5f]/15 text-[#b24a30] text-xs font-semibold">
-            <Ban className="w-3 h-3" />
-            Blocked · #{card.priority}
-          </span>
+          <span className="ml-auto">{badge}</span>
         </div>
         <h2 id="blocked-card-title" className="font-serif text-2xl font-bold leading-tight break-words">
           {card.title}
@@ -616,15 +758,15 @@ const BlockedDetails: React.FC<{
             onClick={onClose}
             className="flex-1 py-2 rounded-full border border-[#d8d1c0] text-sm font-medium hover:bg-[#efe9da]"
           >
-            Keep blocked
+            {closeLabel}
           </button>
           <button
-            onClick={onMakeActive}
-            disabled={!canMakeActive}
-            title={canMakeActive ? 'Move to your Active column and deal it now' : 'No column has type Active'}
+            onClick={onAction}
+            disabled={actionDisabled}
+            title={actionTitle}
             className="flex-1 py-2 rounded-full bg-[#7ed491] text-[#14301f] text-sm font-semibold hover:bg-[#6cc981] disabled:opacity-40"
           >
-            Make active
+            {actionLabel}
           </button>
         </div>
       </motion.div>
@@ -669,6 +811,8 @@ interface DealCardProps {
   onStartWork?: () => void;
   onEdit?: () => void; // open the full editor
   onOpenSingle?: () => void; // 4 up: double-click to see this card alone
+  suit: Suit;
+  face?: Face; // K or Q for the first two cards of the deal
 }
 
 const DealCard: React.FC<DealCardProps> = ({
@@ -688,6 +832,8 @@ const DealCard: React.FC<DealCardProps> = ({
   onStartWork,
   onEdit,
   onOpenSingle,
+  suit,
+  face,
 }) => {
   const x = useMotionValue(0);
   const [editingEstimate, setEditingEstimate] = useState(false);
@@ -755,12 +901,15 @@ const DealCard: React.FC<DealCardProps> = ({
       aria-label={compact ? `Card ${slot}: ${card.title}${selected ? ' (selected)' : ''}` : undefined}
       className={`${
         compact
-          ? 'relative h-[min(36vh,290px)] p-5 [grid-row:var(--slot-stack)] [grid-column:1] sm:[grid-row:var(--slot-row)] sm:[grid-column:var(--slot-col)]'
-          : 'absolute inset-0 p-7 sm:p-9'
-      } rounded-2xl bg-[#faf7ef] text-[#1d1d1b] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.55)] flex flex-col cursor-grab select-none touch-none ${
+          ? 'relative h-[min(36vh,290px)] py-5 px-9 [grid-row:var(--slot-stack)] [grid-column:1] sm:[grid-row:var(--slot-row)] sm:[grid-column:var(--slot-col)]'
+          : 'absolute inset-0 py-8 px-12 sm:px-14 sm:py-10'
+      } isolate overflow-hidden rounded-2xl bg-[#faf7ef] text-[#1d1d1b] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.55)] flex flex-col cursor-grab select-none touch-none ${
         compact && selected ? 'ring-2 ring-[#f3efe4] ring-offset-4 ring-offset-[#1f3a32]' : ''
       }`}
     >
+      {/* Playing-card dress: frame, corner indices and a faint centre mark (all behind the content) */}
+      <CardDress suit={suit} face={face} rank={card.priority} compact={compact} />
+
       {/* Swipe stamps */}
       <motion.span
         style={{ opacity: doneHint }}
@@ -785,7 +934,9 @@ const DealCard: React.FC<DealCardProps> = ({
           </span>
         )}
         <span className="ml-auto text-xs uppercase tracking-wide text-[#8a867b] truncate">
-          {compact && slot ? <span className="mr-1.5 normal-case text-[#b0aa9b]">{slot}</span> : null}#{card.priority} · {columnName}
+          {compact && slot ? <span className="mr-1.5 normal-case text-[#b0aa9b]">{slot}</span> : null}
+          {face ? `#${card.priority} · ` : ''}
+          {columnName}
         </span>
         {onEdit && (
           <button
@@ -886,6 +1037,86 @@ const DealCard: React.FC<DealCardProps> = ({
   );
 };
 
+// ---- Playing-card dress ----
+
+const CardDress: React.FC<{ suit: Suit; face?: Face; rank: number; compact?: boolean }> = ({ suit, face, rank, compact }) => {
+  const red = isRedSuit(suit);
+  const color = red ? SUIT_RED : SUIT_BLACK;
+  const label = face ?? String(rank);
+  const index = (
+    <span
+      className="flex flex-col items-center leading-none font-serif font-bold"
+      style={{ color: red ? SUIT_RED_SOFT : SUIT_BLACK_SOFT, opacity: 0.85 }}
+    >
+      <span className={`${compact ? 'text-xl' : 'text-3xl'} ${label.length > 2 ? 'tracking-tighter' : ''}`}>{label}</span>
+      <span className={compact ? 'text-lg -mt-0.5' : 'text-3xl -mt-1'}>{suit}</span>
+    </span>
+  );
+  const corner = compact ? 'top-2 left-1 min-w-[22px]' : 'top-3 left-2 min-w-[32px]';
+  const cornerBR = compact ? 'bottom-2 right-1 min-w-[22px]' : 'bottom-3 right-2 min-w-[32px]';
+  return (
+    <>
+      {/* frame: thin suit-coloured line; double gold line on face cards */}
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute -z-10 rounded-[11px] ${compact ? 'inset-[5px]' : 'inset-[7px]'} ${
+          face ? 'border-[3px] border-double border-[#b08d3c]/70' : 'border'
+        }`}
+        style={face ? undefined : { borderColor: `${color}80`, borderWidth: compact ? 1.5 : 2 }}
+      />
+      {/* corner indices, like a real card (the bottom one upside down) */}
+      <span aria-hidden="true" className={`pointer-events-none absolute flex justify-center ${corner}`}>
+        {index}
+      </span>
+      <span aria-hidden="true" className={`pointer-events-none absolute flex justify-center rotate-180 ${cornerBR}`}>
+        {index}
+      </span>
+      {/* faint centre mark: the suit, or crown + letter on face cards */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 flex flex-col items-center justify-center font-serif"
+        style={{ color, opacity: face ? 0.09 : 0.06 }}
+      >
+        {face ? (
+          <>
+            <Crown className={compact ? 'w-10 h-10' : 'w-16 h-16'} strokeWidth={1.5} />
+            <span className={`font-bold leading-none ${compact ? 'text-[110px]' : 'text-[220px]'}`}>{face}</span>
+          </>
+        ) : (
+          <span className={`leading-none ${compact ? 'text-[120px]' : 'text-[240px]'}`}>{suit}</span>
+        )}
+      </span>
+      {/* Active (in progress) cards: a faded red paint stroke swept across the top */}
+      {red && (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 400 70"
+          preserveAspectRatio="none"
+          className={`pointer-events-none absolute -z-10 left-0 right-0 ${compact ? 'top-1 h-12' : 'top-2 h-20'}`}
+          style={{ color: SUIT_RED, opacity: 0.13 }}
+        >
+          {/* a brush stroke: thick wavy band with ragged ends */}
+          <path
+            fill="currentColor"
+            d="M6 34 C40 14 78 12 118 24 S196 46 238 30 S318 6 358 18 C374 22 388 30 396 26
+               L392 38 C380 44 366 40 352 36 C312 26 282 50 238 52 S158 38 118 42 S52 56 18 50
+               C10 48 4 44 2 40 Z"
+          />
+          <path
+            fill="currentColor"
+            opacity="0.6"
+            d="M30 46 C70 36 110 34 150 40 S230 48 270 40 S340 28 380 34 L378 40 C340 38 300 50 262 52 S184 50 146 48 S72 50 34 54 Z"
+          />
+        </svg>
+      )}
+      <span className="sr-only">
+        {face === 'K' ? 'King' : face === 'Q' ? 'Queen' : `Rank ${rank}`} of{' '}
+        {suit === '♥' ? 'hearts' : suit === '♦' ? 'diamonds' : suit === '♠' ? 'spades' : 'clubs'}
+      </span>
+    </>
+  );
+};
+
 // ---- A pile of played cards ----
 
 const Pile: React.FC<{
@@ -894,13 +1125,25 @@ const Pile: React.FC<{
   topCard?: CardItem;
   areaById: Map<string, Area>;
   tone: 'done' | 'later';
-}> = ({ label, count, topCard, areaById, tone }) => {
+  open: boolean;
+  onToggle: () => void;
+  cards: CardItem[]; // newest first
+  suitOf: (c: CardItem) => Suit;
+  onBringBack: (id: string) => void;
+}> = ({ label, count, topCard, areaById, tone, open, onToggle, cards, suitOf, onBringBack }) => {
   const color = tone === 'done' ? 'text-[#7ed491]' : 'text-[#e9c46a]';
   const layers = Math.min(count, 3);
   const dot = topCard ? areaById.get(topCard.areaId || '')?.color : undefined;
+  const right = tone === 'done'; // the Done pile sits on the right edge of the table
   return (
-    <div className="flex flex-col gap-2">
-      <div className="relative w-24 h-32">
+    <div className={`flex flex-col gap-2 ${right ? 'lg:items-end' : ''}`}>
+      <button
+        onClick={onToggle}
+        disabled={count === 0}
+        aria-expanded={open}
+        title={count ? (open ? 'Close the pile' : 'Open the pile to bring a card back') : undefined}
+        className="relative w-24 h-32 rounded-lg enabled:cursor-pointer disabled:cursor-default focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#f3efe4]/50"
+      >
         {count === 0 ? (
           <div className="absolute inset-0 rounded-lg border border-dashed border-white/20" />
         ) : (
@@ -908,7 +1151,8 @@ const Pile: React.FC<{
             <motion.div
               key={`${count}-${i}`}
               initial={i === layers - 1 ? { scale: 1.15, opacity: 0 } : false}
-              animate={{ scale: 1, opacity: 1 }}
+              animate={{ scale: 1, opacity: open ? 0.55 : 1 }}
+              whileHover={{ y: -3 }}
               className="absolute inset-0 rounded-lg bg-[#faf7ef] shadow-md border border-black/5"
               style={{ rotate: (i - layers + 1) * (tone === 'done' ? 3 : -3) }}
             >
@@ -916,10 +1160,56 @@ const Pile: React.FC<{
             </motion.div>
           ))
         )}
-      </div>
+      </button>
       <p className={`text-sm font-medium ${color}`}>
         {label} <span className="text-[#f3efe4]/70 ml-1">{count}</span>
+        {count > 0 && <span className="ml-1.5 text-[11px] text-[#f3efe4]/45">{open ? '▴ close' : '▾ open'}</span>}
       </p>
+
+      {/* Fanned out: every card in the pile with its title; click one to bring it back */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.ul
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className={`flex flex-col gap-1.5 w-[min(250px,80vw)] overflow-hidden ${right ? 'lg:items-end' : ''}`}
+          >
+            {cards.map((c, i) => {
+              const suit = suitOf(c);
+              return (
+                <motion.li
+                  key={c.id}
+                  layout
+                  initial={{ opacity: 0, x: right ? 16 : -16, rotate: right ? 2 : -2 }}
+                  animate={{ opacity: 1, x: 0, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ delay: i * 0.03 }}
+                  className="w-full"
+                >
+                  <button
+                    onClick={() => onBringBack(c.id)}
+                    title={tone === 'done' ? 'Bring back: undo Done and return it to the deal' : 'Bring back into the deal'}
+                    className="group w-full flex items-center gap-2 pl-2.5 pr-2 py-2 rounded-lg bg-[#faf7ef] text-[#1d1d1b] text-left shadow-md hover:-translate-y-0.5 transition-transform"
+                  >
+                    <span
+                      className="font-serif font-bold text-base leading-none w-4 text-center shrink-0"
+                      style={{ color: isRedSuit(suit) ? SUIT_RED_SOFT : SUIT_BLACK_SOFT }}
+                    >
+                      {suit}
+                    </span>
+                    <span className="text-sm leading-snug line-clamp-2 flex-1">{c.title}</span>
+                    <span className="shrink-0 flex items-center gap-0.5 text-[11px] text-[#8a867b] group-hover:text-[#1d1d1b]">
+                      <Undo2 className="w-3.5 h-3.5" />
+                      <span className="hidden group-hover:inline">Bring back</span>
+                    </span>
+                  </button>
+                </motion.li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -991,6 +1281,11 @@ const HowItWorks: React.FC<{ filterLabel: string | null }> = ({ filterLabel }) =
           <p>
             <strong>Order:</strong> within each group, cards come in your board's priority rank (#1 is dealt first).
             Starred cards always hold the top ranks, so they come early. Change the order by dragging cards on the board.
+          </p>
+          <p>
+            <strong>Suits:</strong> <span className="text-[#b3261e] font-semibold">♥ ♦ red</span> cards are In Progress (Active);{' '}
+            <span className="font-semibold">♠ ♣ black</span> cards are To Do (Pending). The first two cards dealt are the King and
+            Queen; the rest show their priority rank.
           </p>
           <p>
             <strong>Playing:</strong> <span className="text-[#a8730a] font-semibold">← left / Not now</span> skips the card for this deal only, and nothing on
