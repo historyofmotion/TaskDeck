@@ -14,10 +14,12 @@ import {
   ArrowRight,
   Maximize2,
   Minimize2,
+  Clock,
 } from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { extractUrls, getColumnRole, formatFullDate, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
+import { extractUrls, formatHours, getColumnRole, formatFullDate, formatCompletedAtLabel, formatDueDateLabel, getContrastColor, replaceUrlsWithLinkToken } from '../utils/helpers';
 import { DescriptionFlyout } from './DescriptionFlyout';
+import { formatTracked } from '../utils/workTracking';
 
 interface BoardViewProps {
   columns: Column[];
@@ -35,6 +37,7 @@ interface BoardViewProps {
   ) => void;
   onToggleStarAttempt: (cardId: string, isCurrentlyStarred: boolean, currentTitle: string) => void;
   onOpenArchivedCard: (card: CardItem) => void;
+  workingCardId?: string | null; // card whose timer is running
 }
 
 export const BoardView: React.FC<BoardViewProps> = ({
@@ -48,6 +51,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
   onDragDropCard,
   onToggleStarAttempt,
   onOpenArchivedCard,
+  workingCardId,
 }) => {
   const [quickAddInput, setQuickAddInput] = useState<{ [columnId: string]: string }>({});
   const [flyoutCard, setFlyoutCard] = useState<CardItem | null>(null);
@@ -621,6 +625,33 @@ export const BoardView: React.FC<BoardViewProps> = ({
                                 }`}
                               >
                                 {dateInfo.label}
+                              </span>
+                            ) : null}
+
+                            {/* Timer running on this card */}
+                            {card.id === workingCardId && (
+                              <span
+                                title="You're working on this card (timer running)"
+                                className="px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 inline-flex items-center gap-1"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
+                                Working
+                              </span>
+                            )}
+
+                            {/* Time tracked / hour estimate */}
+                            {card.estimateHours || card.trackedSeconds ? (
+                              <span
+                                title={[
+                                  card.trackedSeconds ? `Tracked: ${formatTracked(card.trackedSeconds)}` : '',
+                                  card.estimateHours ? `Estimate: ${formatHours(card.estimateHours)}` : '',
+                                ].filter(Boolean).join(' · ')}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 inline-flex items-center gap-0.5"
+                              >
+                                <Clock className="w-3 h-3" />
+                                {card.trackedSeconds ? formatTracked(card.trackedSeconds) : ''}
+                                {card.trackedSeconds && card.estimateHours ? ' / ' : ''}
+                                {card.estimateHours ? formatHours(card.estimateHours) : ''}
                               </span>
                             ) : null}
 

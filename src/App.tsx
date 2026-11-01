@@ -31,6 +31,7 @@ import {
   resortWithStarredTop,
   runAutoArchive,
   getDoneColumnId,
+  getColumnRole,
   diffBoards,
   BoardDiff,
 } from './utils/helpers';
@@ -44,6 +45,9 @@ import { ArchivedCardModal } from './components/ArchivedCardModal';
 import { OptionsModal } from './components/OptionsModal';
 import { StarLimitModal } from './components/StarLimitModal';
 import { FileSyncModal } from './components/FileSyncModal';
+import { DealView } from './components/DealView';
+import { WorkIndicator } from './components/WorkIndicator';
+import { WorkState, formatTracked, loadWorkState, saveWorkState } from './utils/workTracking';
 import { BoardCheckError, parseBoardFile, summarizeProblems } from './utils/boardCheck';
 import { Toast } from './components/Toast';
 import { HelpModal } from './components/HelpModal';
@@ -68,6 +72,12 @@ export default function App() {
   const [viewingArchivedCard, setViewingArchivedCard] = useState<CardItem | null>(null);
   const [isOptionsOpen, setIsOptionsOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [isDealOpen, setIsDealOpen] = useState<boolean>(false);
+  const [work, setWorkState] = useState<WorkState | null>(loadWorkState);
+  const setWork = (w: WorkState | null) => {
+    setWorkState(w);
+    saveWorkState(w);
+  };
 
   // Star limit state
   const [pendingStarCard, setPendingStarCard] = useState<{
@@ -263,7 +273,7 @@ export default function App() {
           activeEl.getAttribute('contenteditable') === 'true');
 
       if (isInput) return;
-      if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync) {
+      if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync || isDealOpen) {
         return;
       }
 
@@ -280,6 +290,9 @@ export default function App() {
       } else if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
         setViewMode((prev) => (prev === 'board' ? 'list' : 'board'));
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setIsDealOpen(true);
       } else if (e.key === '?') {
         e.preventDefault();
         setIsHelpOpen((prev) => !prev);
@@ -296,6 +309,7 @@ export default function App() {
     isHelpOpen,
     pendingStarCard,
     pendingFileSync,
+    isDealOpen,
     boardData.columns, // N picks a column, so it needs the current list
     quickAddColumnId,
   ]);
@@ -444,6 +458,7 @@ export default function App() {
         starred: isEditingCardStarred,
         progress: cardData.progress || 0,
         dueDate: cardData.dueDate || null,
+        ...(cardData.estimateHours ? { estimateHours: cardData.estimateHours } : {}),
         createdAt: new Date().toISOString(),
         completedAt: cardData.completedAt || null,
       };
@@ -601,6 +616,113 @@ export default function App() {
     });
   };
 
+  // ---- Time tracking ----
+  // Adds working time to a card (on the board or in the archive). Returns the updated board.
+  const withTrackedTime = (data: BoardData, cardId: string, ms: number): BoardData => {
+    const secs = Math.round(ms / 1000);
+    if (secs <= 0) return data;
+    const add = (c: CardItem) => (c.id === cardId ? { ...c, trackedSeconds: (c.trackedSeconds || 0) + secs } : c);
+    return { ...data, cards: data.cards.map(add), archive: data.archive.map(add) };
+  };
+
+  // Close the current working stretch, if any, and save its time
+  const recordWorking = (data: BoardData = boardData): BoardData => {
+    if (work?.mode === 'working' && work.cardId) {
+      const next = withTrackedTime(data, work.cardId, Date.now() - work.since);
+      if (next !== data) updateBoardData(next);
+      return next;
+    }
+    return data;
+  };
+
+  const handleStartWork = (cardId: string) => {
+    if (work?.mode === 'working' && work.cardId === cardId) return;
+    recordWorking();
+    setWork({ cardId, mode: 'working', since: Date.now() });
+  };
+  const handleOffTask = () => {
+    recordWorking();
+    setWork({ cardId: work?.cardId ?? null, mode: 'off', since: Date.now() });
+  };
+  const handleResumeWork = () => {
+    if (work?.cardId) setWork({ cardId: work.cardId, mode: 'working', since: Date.now() });
+  };
+  const handleStopWork = () => {
+    const card = work?.cardId ? boardData.cards.find((c) => c.id === work.cardId) : undefined;
+    const secs = work?.mode === 'working' ? Math.round((Date.now() - work.since) / 1000) : 0;
+    recordWorking();
+    setWork(null);
+    if (card && secs > 0) addToast(`Recorded ${formatTracked(secs) || '<1m'} on "${card.title}".`, 'success');
+  };
+
+  // A card being worked on that's finished, archived or deleted stops its timer (its time is kept)
+  useEffect(() => {
+    if (!work?.cardId) return;
+    const card = boardData.cards.find((c) => c.id === work.cardId);
+    if (card && card.columnId !== getDoneColumnId(boardData.columns)) return;
+    if (work.mode === 'working') {
+      const secs = Math.round((Date.now() - work.since) / 1000);
+      recordWorking();
+      setWork(null);
+      if (secs > 0) addToast(`Timer stopped: ${formatTracked(secs) || '<1m'} recorded.`, 'info');
+    } else {
+      setWork({ ...work, cardId: null }); // stay off task, with no card to go back to
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardData.cards, boardData.columns, work]);
+
+  const workCard = work?.cardId ? boardData.cards.find((c) => c.id === work.cardId) : undefined;
+  const workIndicator = (tone: 'light' | 'felt') => (
+    <WorkIndicator
+      work={work}
+      card={workCard}
+      onOffTask={handleOffTask}
+      onResume={handleResumeWork}
+      onStop={handleStopWork}
+      onOpenCard={tone === 'light' ? (id) => {
+        const c = boardData.cards.find((x) => x.id === id);
+        if (c) setEditingCard(c);
+      } : undefined}
+      tone={tone}
+    />
+  );
+
+  // ---- Deal mode ----
+  // Unblock a card: move it to the end of the first Active column
+  const handleMakeActive = (cardId: string) => {
+    const activeCol = boardData.columns.find((c) => getColumnRole(c) === 'active');
+    if (!activeCol) return;
+    handleDragDropCard(cardId, null, false, activeCol.id);
+    addToast('Card moved to ' + activeCol.name + '.', 'success');
+  };
+  const handleDealDone = (cardId: string) => {
+    const doneColId = getDoneColumnId(boardData.columns);
+    if (doneColId) handleDragDropCard(cardId, null, false, doneColId);
+  };
+
+  // Put a card back where it was before Deal moved it to Done (column, completion and rank)
+  const handleDealUndoDone = (before: CardItem) => {
+    const sorted = [...boardData.cards].sort((a, b) => a.priority - b.priority);
+    const idx = sorted.findIndex((c) => c.id === before.id);
+    if (idx === -1) return;
+    const [current] = sorted.splice(idx, 1);
+    const restored: CardItem = {
+      ...current,
+      columnId: before.columnId,
+      completedAt: before.completedAt,
+      progress: before.progress,
+    };
+    sorted.splice(Math.min(Math.max(before.priority - 1, 0), sorted.length), 0, restored);
+    updateBoardData({ ...boardData, cards: normalizePriorities(sorted) });
+  };
+
+  const handleSetEstimate = (cardId: string, hours: number) => {
+    updateBoardData({
+      ...boardData,
+      cards: boardData.cards.map((c) => (c.id === cardId ? { ...c, estimateHours: hours } : c)),
+    });
+  };
+
   // Reorder all cards (e.g. from List View menu)
   const handleReorderAllCards = (newCards: CardItem[], mode: 'status' | 'project') => {
     updateBoardData({
@@ -737,6 +859,7 @@ export default function App() {
         }}
         onOpenOptions={() => setIsOptionsOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenDeal={() => setIsDealOpen(true)}
         onCopyBoard={handleCopyBoard}
       />
 
@@ -763,6 +886,7 @@ export default function App() {
       )}
 
       <ActionLine
+        workSlot={workIndicator('light')}
         cards={boardData.cards}
         columns={boardData.columns}
         onOpenCard={(cardId) => {
@@ -785,6 +909,7 @@ export default function App() {
             onDragDropCard={handleDragDropCard}
             onToggleStarAttempt={handleToggleStarAttempt}
             onOpenArchivedCard={setViewingArchivedCard}
+            workingCardId={work?.mode === 'working' ? work.cardId : null}
           />
         ) : (
           <ListView
@@ -803,6 +928,32 @@ export default function App() {
         )}
       </main>
 
+      {/* Deal: play through the top cards */}
+      {isDealOpen && (
+        <DealView
+          cards={filteredCards}
+          columns={boardData.columns}
+          areas={boardData.areas}
+          filterLabel={
+            selectedAreaId === 'ALL'
+              ? null
+              : selectedAreaId === 'NO_AREA'
+              ? 'No project'
+              : areaMap.get(selectedAreaId)?.name || null
+          }
+          onDone={handleDealDone}
+          onUndoDone={handleDealUndoDone}
+          onSetEstimate={handleSetEstimate}
+          onClose={() => setIsDealOpen(false)}
+          workIndicator={workIndicator('felt')}
+          workingCardId={work?.mode === 'working' ? work.cardId : null}
+          onStartWork={handleStartWork}
+          onMakeActive={handleMakeActive}
+          onEditCard={setEditingCard}
+          paused={!!editingCard || !!pendingStarCard}
+        />
+      )}
+
       {/* Create / Edit Card Modal */}
       {(editingCard || isNewCardModalOpen) && (
         <CardModal
@@ -820,6 +971,9 @@ export default function App() {
           }}
           onToggleStarAttempt={handleToggleStarAttempt}
           isStarredState={editingCard ? editingCard.starred : isEditingCardStarred}
+          isWorking={!!editingCard && work?.mode === 'working' && work.cardId === editingCard.id}
+          onStartWork={handleStartWork}
+          onStopWork={handleStopWork}
         />
       )}
 

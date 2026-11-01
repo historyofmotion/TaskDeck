@@ -90,6 +90,8 @@ export function checkBoard(raw: unknown): CheckedBoard {
   let clearedProjects = 0;
   let clearedDueDates = 0;
   let fixedProgress = 0;
+  let clearedEstimates = 0;
+  let clearedTracked = 0;
 
   const checkCard = (c: unknown, label: string): CardItem | null => {
     const id = isObj(c) ? nonEmpty(c.id) : null;
@@ -123,6 +125,24 @@ export function checkBoard(raw: unknown): CheckedBoard {
       fixedProgress++;
     }
 
+    let estimateHours: number | null = null;
+    if (c.estimateHours != null) {
+      if (typeof c.estimateHours === 'number' && isFinite(c.estimateHours) && c.estimateHours > 0) {
+        estimateHours = Math.min(c.estimateHours, 1000);
+      } else {
+        clearedEstimates++;
+      }
+    }
+
+    let trackedSeconds = 0;
+    if (c.trackedSeconds != null) {
+      if (typeof c.trackedSeconds === 'number' && isFinite(c.trackedSeconds) && c.trackedSeconds >= 0) {
+        trackedSeconds = Math.round(c.trackedSeconds);
+      } else {
+        clearedTracked++;
+      }
+    }
+
     return {
       id,
       title,
@@ -136,6 +156,8 @@ export function checkBoard(raw: unknown): CheckedBoard {
       createdAt: isoOrNull(c.createdAt) || new Date().toISOString(),
       completedAt: isoOrNull(c.completedAt),
       ...(c.archivedAt !== undefined ? { archivedAt: isoOrNull(c.archivedAt) } : {}),
+      ...(estimateHours !== null ? { estimateHours } : {}),
+      ...(trackedSeconds > 0 ? { trackedSeconds } : {}),
     };
   };
 
@@ -166,6 +188,8 @@ export function checkBoard(raw: unknown): CheckedBoard {
   if (clearedProjects) fixes.push(`${plural(clearedProjects, 'card')} pointed to a missing project, so ${clearedProjects === 1 ? 'it was' : 'they were'} cleared`);
   if (clearedDueDates) fixes.push(`${plural(clearedDueDates, 'due date')} ${was(clearedDueDates)}n't in YYYY-MM-DD format and ${was(clearedDueDates)} cleared`);
   if (fixedProgress) fixes.push(`${plural(fixedProgress, 'progress value')} ${was(fixedProgress)} invalid and ${was(fixedProgress)} corrected`);
+  if (clearedEstimates) fixes.push(`${plural(clearedEstimates, 'hour estimate')} ${was(clearedEstimates)} invalid and ${was(clearedEstimates)} cleared`);
+  if (clearedTracked) fixes.push(`${plural(clearedTracked, 'tracked time')} ${was(clearedTracked)} invalid and ${was(clearedTracked)} cleared`);
   if (unstarred) fixes.push(`${plural(unstarred, 'card')} unstarred to keep the ${MAX_STARS}-star limit`);
 
   // ---- Settings ----

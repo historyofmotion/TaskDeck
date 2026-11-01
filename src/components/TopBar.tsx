@@ -12,6 +12,7 @@ import {
   Settings,
   X,
   HelpCircle,
+  Spade,
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -28,6 +29,7 @@ interface TopBarProps {
   onNewCard: () => void;
   onOpenOptions: () => void;
   onOpenHelp: () => void;
+  onOpenDeal: () => void;
   onCopyBoard: () => void;
 }
 
@@ -45,6 +47,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onNewCard,
   onOpenOptions,
   onOpenHelp,
+  onOpenDeal,
   onCopyBoard,
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -129,6 +132,16 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             <ListFilter className="w-3.5 h-3.5" />
             <span>List</span>
+          </button>
+
+          <button
+            onClick={onOpenDeal}
+            title="Deal your top cards (Shortcut: T)"
+            aria-label="Deal your top cards"
+            className="flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+          >
+            <Spade className="w-3.5 h-3.5" />
+            <span>Deal</span>
           </button>
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-0.5" />

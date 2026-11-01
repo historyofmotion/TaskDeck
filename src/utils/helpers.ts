@@ -217,6 +217,13 @@ export function moveCardToColumnEnd(
   return normalizePriorities(cards);
 }
 
+// Hour estimate as short text: 0.5 -> "30m", 1.5 -> "1.5h", 8 -> "8h"
+export function formatHours(hours: number | null | undefined): string {
+  if (hours == null || !isFinite(hours) || hours <= 0) return '';
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  return `${Math.round(hours * 100) / 100}h`;
+}
+
 export function generatePlainTextCopy(data: BoardData): string {
   const sortedCards = [...data.cards].sort((a, b) => a.priority - b.priority);
   const colMap = new Map<string, string>(data.columns.map((c) => [c.id, c.name]));

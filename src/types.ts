@@ -35,6 +35,8 @@ export interface CardItem {
   createdAt: string; // ISO string
   completedAt: string | null; // ISO string
   archivedAt?: string | null;
+  estimateHours?: number | null; // hours needed to finish; null/missing = not estimated
+  trackedSeconds?: number; // working time recorded with the timer
 }
 
 export interface BoardData {

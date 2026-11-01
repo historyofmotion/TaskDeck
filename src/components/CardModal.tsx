@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Area, CardItem, Column } from '../types';
-import { Star, ExternalLink, Archive, Trash2, X, Calendar, Layers, SlidersHorizontal, Check } from 'lucide-react';
-import { extractUrls, getDoneColumnId } from '../utils/helpers';
+import { Star, ExternalLink, Archive, Trash2, X, Calendar, Layers, SlidersHorizontal, Check, Clock, Play, Square } from 'lucide-react';
+import { extractUrls, formatHours, getDoneColumnId } from '../utils/helpers';
 import { useModalAccessibility } from '../utils/useModalAccessibility';
+import { formatTracked } from '../utils/workTracking';
 
 interface CardModalProps {
   card: CardItem | null; // null if creating a new card
@@ -15,6 +16,9 @@ interface CardModalProps {
   onClose: () => void;
   onToggleStarAttempt: (cardId: string | null, isCurrentlyStarred: boolean, currentTitle: string) => void;
   isStarredState: boolean;
+  isWorking?: boolean; // this card's timer is running
+  onStartWork?: (cardId: string) => void;
+  onStopWork?: () => void;
 }
 
 export const CardModal: React.FC<CardModalProps> = ({
@@ -28,6 +32,9 @@ export const CardModal: React.FC<CardModalProps> = ({
   onClose,
   onToggleStarAttempt,
   isStarredState,
+  isWorking,
+  onStartWork,
+  onStopWork,
 }) => {
   const [title, setTitle] = useState(card?.title || '');
   const [description, setDescription] = useState(card?.description || '');
@@ -45,6 +52,7 @@ export const CardModal: React.FC<CardModalProps> = ({
   const [columnId, setColumnId] = useState<string>(getInitialColumnId());
   const [dueDate, setDueDate] = useState<string>(card?.dueDate || '');
   const [progress, setProgress] = useState<number>(card ? card.progress : 0);
+  const [estimate, setEstimate] = useState<string>(card?.estimateHours ? String(card.estimateHours) : '');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [starred, setStarred] = useState<boolean>(card ? card.starred : isStarredState);
 
@@ -81,6 +89,12 @@ export const CardModal: React.FC<CardModalProps> = ({
 
   const urlsInDescription = extractUrls(description);
 
+  const ESTIMATE_PRESETS = [0.25, 0.5, 1, 2, 4, 8];
+  const parseEstimate = (text: string): number | null => {
+    const n = parseFloat(text);
+    return isFinite(n) && n > 0 ? Math.min(n, 1000) : null;
+  };
+
   // Auto-save on backdrop click / close
   const handleSaveAndClose = () => {
     if (!title.trim()) {
@@ -96,6 +110,7 @@ export const CardModal: React.FC<CardModalProps> = ({
       columnId,
       dueDate: dueDate || null,
       progress,
+      estimateHours: parseEstimate(estimate),
       starred: starred,
       completedAt: isDoneStatus
         ? card?.completedAt || new Date().toISOString()
@@ -246,6 +261,50 @@ export const CardModal: React.FC<CardModalProps> = ({
             </div>
           </div>
 
+          {/* Hour estimate */}
+          <div>
+            <label htmlFor="card-estimate" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Estimate (hours to finish)</span>
+              {card?.trackedSeconds ? (
+                <span className="ml-auto font-normal text-slate-500 dark:text-slate-400">
+                  {formatTracked(card.trackedSeconds)} tracked so far
+                </span>
+              ) : null}
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                id="card-estimate"
+                type="number"
+                min="0"
+                step="0.25"
+                inputMode="decimal"
+                placeholder="—"
+                value={estimate}
+                onChange={(e) => setEstimate(e.target.value)}
+                className="w-20 px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+              {ESTIMATE_PRESETS.map((h) => {
+                const active = parseEstimate(estimate) === h;
+                return (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setEstimate(active ? '' : String(h))}
+                    aria-pressed={active}
+                    className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                      active
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {formatHours(h)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Description */}
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -315,6 +374,31 @@ export const CardModal: React.FC<CardModalProps> = ({
                   </button>
                 )}
               </>
+            )}
+
+            {/* Timer: start working on this card, or stop it */}
+            {card && !isDoneStatus && onStartWork && (
+              isWorking ? (
+                <button
+                  type="button"
+                  onClick={() => onStopWork?.()}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors"
+                  title="Stop the timer and record the time on this card"
+                >
+                  <Square className="w-3 h-3" />
+                  <span>Stop timer</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onStartWork(card.id)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  title="Start the timer: you're working on this card now"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Start working</span>
+                </button>
+              )
             )}
 
             {/* Archive button: ONLY appears when card status is Done! */}

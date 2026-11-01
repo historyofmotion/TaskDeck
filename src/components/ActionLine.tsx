@@ -7,9 +7,10 @@ interface ActionLineProps {
   cards: CardItem[];
   columns: Column[];
   onOpenCard: (cardId: string) => void;
+  workSlot?: React.ReactNode; // what you're working on right now (shown at the end of the bar)
 }
 
-export const ActionLine: React.FC<ActionLineProps> = ({ cards, columns, onOpenCard }) => {
+export const ActionLine: React.FC<ActionLineProps> = ({ cards, columns, onOpenCard, workSlot }) => {
   const doneColId = columns.find((c) => getColumnRole(c) === 'done')?.id;
   const blockedColId = columns.find((c) => getColumnRole(c) === 'blocked')?.id;
 
@@ -102,6 +103,8 @@ export const ActionLine: React.FC<ActionLineProps> = ({ cards, columns, onOpenCa
             </span>
           </button>
         )}
+
+        {workSlot && <div className="ml-auto shrink-0">{workSlot}</div>}
       </div>
     </div>
   );
