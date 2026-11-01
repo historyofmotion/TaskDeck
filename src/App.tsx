@@ -47,7 +47,7 @@ import { StarLimitModal } from './components/StarLimitModal';
 import { FileSyncModal } from './components/FileSyncModal';
 import { DealView } from './components/DealView';
 import { WorkIndicator } from './components/WorkIndicator';
-import { WorkState, formatTracked, loadWorkState, saveWorkState } from './utils/workTracking';
+import { WORK_KEY, WorkState, formatTracked, loadWorkState, saveWorkState } from './utils/workTracking';
 import { BoardCheckError, parseBoardFile, summarizeProblems } from './utils/boardCheck';
 import { Toast } from './components/Toast';
 import { HelpModal } from './components/HelpModal';
@@ -635,11 +635,25 @@ export default function App() {
     return data;
   };
 
+  // Only one card can be worked on: starting a card stops (and records) the one before it
   const handleStartWork = (cardId: string) => {
     if (work?.mode === 'working' && work.cardId === cardId) return;
+    const previous = work?.mode === 'working' && work.cardId ? boardData.cards.find((c) => c.id === work.cardId) : undefined;
+    const secs = previous && work ? Math.round((Date.now() - work.since) / 1000) : 0;
     recordWorking();
     setWork({ cardId, mode: 'working', since: Date.now() });
+    if (previous) addToast(`Stopped "${previous.title}" (${formatTracked(secs) || '<1m'} recorded).`, 'info');
   };
+
+  // Another TaskDeck tab changed the timer: follow it, so two tabs never run two timers.
+  // (The tab that made the change has already recorded the time.)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === WORK_KEY) setWorkState(loadWorkState());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
   const handleOffTask = () => {
     recordWorking();
     setWork({ cardId: work?.cardId ?? null, mode: 'off', since: Date.now() });

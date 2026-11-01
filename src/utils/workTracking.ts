@@ -10,7 +10,7 @@ export interface WorkState {
   since: number; // ms timestamp when the current working or off-task stretch began
 }
 
-const WORK_KEY = 'taskdeck_work_state';
+export const WORK_KEY = 'taskdeck_work_state';
 
 export function loadWorkState(): WorkState | null {
   try {

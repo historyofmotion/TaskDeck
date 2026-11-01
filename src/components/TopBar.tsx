@@ -136,7 +136,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
           <button
             onClick={onOpenDeal}
-            title="Deal your top cards (Shortcut: T)"
+            title="Deal your top cards (Shortcut: T, press again to come back)"
             aria-label="Deal your top cards"
             className="flex items-center gap-1.5 px-2.5 h-full rounded-md text-xs font-medium transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
           >

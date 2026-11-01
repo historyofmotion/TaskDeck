@@ -635,7 +635,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                                 className="px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 inline-flex items-center gap-1"
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
-                                Working
+                                <span className="working-pulse">Working</span>
                               </span>
                             )}
 

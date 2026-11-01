@@ -31,7 +31,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
     { key: 'N', label: 'Create New Task' },
     { key: 'V', label: 'Toggle View Mode (Board / List)' },
     { key: 'D', label: 'Toggle Card Descriptions' },
-    { key: 'T', label: 'Deal your top cards (then ← not now, → done, Z undo)' },
+    { key: 'T', label: 'Open Deal, or back to the board from Deal (in Deal: ← not now, → done, Z undo)' },
     { key: '/', label: 'Focus Search Input' },
     { key: 'Enter / Space', label: 'Open focused Card Modal' },
     { key: 'Alt + ↑ / ↓', label: 'Move Task Priority Rank Up/Down' },

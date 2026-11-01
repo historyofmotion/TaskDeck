@@ -115,7 +115,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 - **DEAL-7** A card without an estimate offers quick picks (15m, 30m, 1h, 2h, 4h, 8h; 30m–4h in 4 up); picking one saves it to the card. Clicking a card's estimate shows the picks again (current one highlighted, × keeps it).
 - **DEAL-8** The table shows: the Not now pile and its count, the next 3 cards after the ones in view with their estimates, and how many more are face down, the Done pile and its count, hours cleared (sum of estimates of cards done in this deal, plus how many had no estimate), hours still in the deck, and "n of m played".
 - **DEAL-9** When the deck is empty, a summary shows the number done (with hours) and set aside. "Deal again" deals the next cards, skipping every card already played since Deal was opened; it only appears if any are left.
-- **DEAL-10** Esc or the close button returns to the board. Board shortcuts are off while Deal is open.
+- **DEAL-10** Esc, T or the close button returns to the board. Board shortcuts are off while Deal is open.
 - **DEAL-11** Large "← Not now" and "Done →" labels sit either side of the card(s) and light up as a card is dragged toward them (hidden on phone-width screens, and below extra-wide screens in 4 up). The Not now / Done buttons and a line of instructions sit under the cards in both modes; in 4 up they act on the outlined card.
 - **DEAL-12** An ⓘ button next to the title opens "How the deal works" (on hover, keyboard focus or tap): which cards are dealt, that they come in priority rank with starred cards first, what left, right and Undo do, and how hours are counted.
 - **DEAL-13** A "1 card / 4 up" switch in the header (or the F key) changes the table. The choice is remembered in this browser.
@@ -133,13 +133,14 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 
 - **WORK-1** There are three states: not tracking, working on one card, or off task. Only one card can be worked on at a time.
 - **WORK-2** The state shows at the right end of the Focus bar and under the Deal header: a pulsing green "Working on <title>" with this stretch's clock and the card's total, an amber "Off task" with its clock, or a grey "Not tracking".
-- **WORK-3** Start working from ▶ Start on a Deal card or "Start working" in the card editor. Starting another card first records time on the previous one.
+- **WORK-3** Start working from ▶ Start on a Deal card or "Start working" in the card editor. Only one card can be worked on: starting another card must first stop the previous one and record its time, with a message saying how much was recorded.
 - **WORK-4** "Off task" records the working time on the card and starts an off-task clock. "Back to <title>" resumes the card. Off task can also be started with no card. Off-task time isn't recorded anywhere.
 - **WORK-5** "Stop" records the working time on the card and shows how much was recorded.
 - **WORK-6** Recorded time is added to the card's `trackedSeconds`. It saves with the board and appears on the board tile (`25m / 1h` with the estimate), on Deal cards and in the card editor.
 - **WORK-7** When the card being worked on is moved to Done (or archived or deleted), the timer must stop and record its time. If off task, the off-task clock keeps running with no card to return to.
-- **WORK-8** A running timer survives a page reload (kept in this browser only). Board tiles show a "Working" badge on that card.
-- **Limit WORK-L1** The timer is per browser: another browser or device using the same board.json doesn't see it.
+- **WORK-8** A running timer survives a page reload (kept in this browser only). Board tiles show a "Working" badge on that card. The "Working" / "Working on" text pulses (not with the reduced-motion setting).
+- **WORK-9** Several TaskDeck tabs in the same browser share one timer: when one tab starts, switches or stops it, the others follow straight away.
+- **Limit WORK-L1** The timer is per browser (tabs share it): another browser or device using the same board.json doesn't see it.
 
 ## 8. Card editor
 
@@ -215,7 +216,7 @@ Card fields: `id`, `title` (required), `description`, `areaId` (or none), `colum
 | N | New card |
 | V | Switch Board / List |
 | D | Show or hide descriptions |
-| T | Open Deal |
+| T | Open Deal; in Deal, back to the board |
 | ← / → / Z (in Deal) | Not now / Done / Undo |
 | F / 1–4 (in Deal) | Switch 1 card / 4 up; select a card in 4 up |
 | / | Focus search |

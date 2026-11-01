@@ -27,6 +27,18 @@ body {
   transform-origin: 50% 100%;
 }
 
+/* "Working" label on the card whose timer is running */
+@keyframes working-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.06); }
+}
+
+.working-pulse {
+  display: inline-block;
+  animation: working-pulse 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-idle-wiggle { animation: none; }
+  .working-pulse { animation: none; }
 }

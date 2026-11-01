@@ -212,7 +212,8 @@ export const DealView: React.FC<DealViewProps> = ({
         }
         return;
       }
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' || e.key === 't' || e.key === 'T') {
+        // T opens Deal from the board and closes it again
         e.preventDefault();
         onClose();
       } else if (e.key === 'ArrowRight') {
@@ -329,7 +330,7 @@ export const DealView: React.FC<DealViewProps> = ({
           </button>
           <button
             onClick={onClose}
-            title="Back to the board (Esc)"
+            title="Back to the board (Esc or T)"
             aria-label="Back to the board"
             className="p-1.5 rounded-md hover:bg-white/10"
           >
@@ -701,7 +702,7 @@ const DealCard: React.FC<DealCardProps> = ({
   const startControl = working ? (
     <span className="flex items-center gap-1.5 text-xs font-semibold text-[#23824a]" title="The timer is running on this card">
       <span className="w-2 h-2 rounded-full bg-[#2f9e57] animate-pulse motion-reduce:animate-none" />
-      Working
+      <span className="working-pulse">Working</span>
     </span>
   ) : onStartWork ? (
     <button

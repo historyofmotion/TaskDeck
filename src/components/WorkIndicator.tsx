@@ -69,7 +69,7 @@ export const WorkIndicator: React.FC<WorkIndicatorProps> = ({
           <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-400 opacity-75 animate-ping motion-reduce:animate-none" />
           <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
         </span>
-        <span className="font-semibold">Working on</span>
+        <span className="font-semibold working-pulse">Working on</span>
         <button
           onClick={() => card && onOpenCard?.(card.id)}
           disabled={!onOpenCard}
