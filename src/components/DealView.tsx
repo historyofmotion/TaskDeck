@@ -920,6 +920,8 @@ const DealCard: React.FC<DealCardProps> = ({
 }) => {
   const x = useMotionValue(0);
   const [editingEstimate, setEditingEstimate] = useState(false);
+  // The DONE / NOT NOW stamps belong to dragging the card, not to the slide-in used when scrubbing
+  const [dragging, setDragging] = useState(false);
   const tilt = useTransform(x, [-300, 300], [-14, 14]);
   const doneHint = useTransform(x, [20, SWIPE_DISTANCE], [0, 1]);
   const laterHint = useTransform(x, [-SWIPE_DISTANCE, -20], [1, 0]);
@@ -967,8 +969,12 @@ const DealCard: React.FC<DealCardProps> = ({
       drag="x"
       dragSnapToOrigin
       dragElastic={0.9}
+      onDragStart={() => setDragging(true)}
       onDrag={(_, info) => dragX.set(info.offset.x)}
-      onDragEnd={handleDragEnd}
+      onDragEnd={(e, info) => {
+        setDragging(false);
+        handleDragEnd(e, info);
+      }}
       onTap={onSelect}
       onDoubleClick={onOpenSingle}
       style={{
@@ -995,13 +1001,13 @@ const DealCard: React.FC<DealCardProps> = ({
 
       {/* Swipe stamps */}
       <motion.span
-        style={{ opacity: doneHint }}
+        style={{ opacity: dragging ? doneHint : 0 }}
         className="pointer-events-none absolute top-6 right-6 rotate-12 px-3 py-1 rounded-md border-2 border-[#2f9e57] text-[#2f9e57] font-bold tracking-widest text-sm"
       >
         DONE
       </motion.span>
       <motion.span
-        style={{ opacity: laterHint }}
+        style={{ opacity: dragging ? laterHint : 0 }}
         className="pointer-events-none absolute top-6 left-6 -rotate-12 px-3 py-1 rounded-md border-2 border-[#c98f12] text-[#c98f12] font-bold tracking-widest text-sm"
       >
         NOT NOW
