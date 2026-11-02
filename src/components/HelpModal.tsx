@@ -49,7 +49,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
   const tips = [
     {
       title: 'Matrix view',
-      desc: 'Drag a card so its circle sits where you want it: Impact up and down, Timeframe left to right. Titles run left from the circle near the right edge. The magnifier on a quadrant label zooms in on it for finer placement (Esc zooms out). Done cards from the last 7 days are in a folded list under the details, where you can make one active again.',
+      desc: 'Drag a card so its circle sits where you want it: Impact up and down, Timeframe left to right. Titles run left from the circle near the right edge. Double-click a quadrant, or use the magnifier on its label, to zoom in for finer placement; double-click again or press Esc to zoom out. Done cards from the last 7 days are in a folded list under the details, where you can make one active again.',
       icon: Grid2x2,
     },
     {

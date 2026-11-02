@@ -220,16 +220,16 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             className="relative flex-1 min-w-0 self-start aspect-square rounded-xl border border-slate-200 dark:border-slate-800 grid grid-cols-2 grid-rows-2"
           >
             {(zoom ? [zoom] : (['important', 'urgent', 'questionable', 'needed'] as Quadrant[])).map((q) => (
-              <div key={q} className={`relative transition-colors ${zoom ? 'col-span-2 row-span-2 rounded-xl' : { important: 'rounded-tl-xl', urgent: 'rounded-tr-xl', questionable: 'rounded-bl-xl', needed: 'rounded-br-xl' }[q]} ${hover === q ? `${QUADRANTS[q].lit} ring-2 ring-inset z-[5]` : QUADRANTS[q].tint
+              <div key={q} onDoubleClick={() => setZoom(zoom ? null : q)} title={zoom ? 'Double-click to zoom back out' : `Double-click to zoom in on ${QUADRANTS[q].name}`} className={`relative select-none transition-colors ${zoom ? 'col-span-2 row-span-2 rounded-xl' : { important: 'rounded-tl-xl', urgent: 'rounded-tr-xl', questionable: 'rounded-bl-xl', needed: 'rounded-br-xl' }[q]} ${hover === q ? `${QUADRANTS[q].lit} ring-2 ring-inset z-[5]` : QUADRANTS[q].tint
               } border-slate-200/80 dark:border-slate-800 ${!zoom && (q === 'important' || q === 'questionable') ? 'border-r' : ''} ${!zoom && (q === 'important' || q === 'urgent') ? 'border-b' : ''}`}>
-                <div className={`absolute ${QUADRANTS[q].corner} select-none z-20`}>
+                <div className={`absolute ${QUADRANTS[q].corner} select-none z-[5] pointer-events-none`}>
                   <p className={`text-xs font-bold flex items-center gap-1 ${QUADRANTS[q].text} ${QUADRANTS[q].corner.includes('text-right') ? 'flex-row-reverse' : ''}`}>
                     {QUADRANTS[q].name}
                     <button
                       onClick={() => setZoom(zoom ? null : q)}
                       title={zoom ? 'Back to all four quadrants (Esc)' : `Zoom in on ${QUADRANTS[q].name} to place cards more precisely`}
                       aria-label={zoom ? 'Show all four quadrants' : `Zoom in on ${QUADRANTS[q].name}`}
-                      className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                      className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 pointer-events-auto"
                     >
                       {zoom ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
                     </button>
@@ -309,6 +309,24 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
 
       {/* ---- Side panel ---- */}
       <aside className="flex flex-col gap-4 min-w-0">
+        {/* the point of this view: turn the placement into the board's ranking */}
+        <section className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4 flex flex-col gap-2">
+          <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Rank your board from this matrix</p>
+          <p className="text-xs text-indigo-800/80 dark:text-indigo-200/80 leading-relaxed">
+            Urgent first, then Important, Needed, Questionable; nearest the top-right corner first within each. Starred cards stay on top, and cards you haven't placed follow.
+          </p>
+          <button
+            onClick={onUseMatrixOrder}
+            disabled={placed.length === 0}
+            title="Renumber the board's ranks from where the cards sit on the matrix"
+            className="mt-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm disabled:opacity-40 disabled:hover:bg-indigo-600"
+          >
+            <ListOrdered className="w-4 h-4" />
+            Use matrix order for ranks
+          </button>
+          {placed.length === 0 && <p className="text-[11px] text-indigo-800/70 dark:text-indigo-200/70">Place some cards first.</p>}
+        </section>
+
         <section>
           <p className="text-xs text-slate-500 dark:text-slate-400">Your Urgent corner</p>
           <p className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
@@ -336,15 +354,6 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
               ))}
             </ol>
           )}
-          <button
-            onClick={onUseMatrixOrder}
-            disabled={placed.length === 0}
-            title="Renumber the board: Urgent, then Important, Needed, Questionable (nearest the top-right first). Starred cards stay on top; unplaced cards follow."
-            className="mt-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 disabled:opacity-40"
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-            Use matrix order for ranks
-          </button>
         </section>
 
         {/* details of the selected card */}
