@@ -63,6 +63,14 @@ const ORIGIN: Record<Quadrant, Point> = {
   questionable: { x: 0, y: 0 },
 };
 
+// Where each quadrant sits in the full grid, as a transform-origin
+const CORNER: Record<Quadrant, string> = {
+  important: 'top left',
+  urgent: 'top right',
+  needed: 'bottom right',
+  questionable: 'bottom left',
+};
+
 const ROLE_ORDER: Record<string, number> = { active: 0, blocked: 1, pending: 2 };
 
 const RECENT_DAYS = 7;
@@ -102,6 +110,20 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   const [doneOpen, setDoneOpen] = useState(false);
   // One quadrant blown up to fill the whole grid, for finer placement
   const [zoom, setZoom] = useState<Quadrant | null>(null);
+  // Zooming animates the grid: in, it grows from the quadrant's corner; out, it shrinks back into it
+  const [zooming, setZooming] = useState(false);
+  const prevZoom = useRef<Quadrant | null>(null);
+  const zoomKey = zoom || 'all';
+  const zoomFrom = zoom ? { scale: 0.5, corner: zoom } : prevZoom.current ? { scale: 2, corner: prevZoom.current } : null;
+  const lastZoomKey = useRef(zoomKey);
+  const zoomOrigin = useRef('center');
+  if (lastZoomKey.current !== zoomKey) {
+    lastZoomKey.current = zoomKey;
+    zoomOrigin.current = zoomFrom ? CORNER[zoomFrom.corner] : 'center';
+  }
+  useEffect(() => {
+    prevZoom.current = zoom;
+  }, [zoom]);
   useEffect(() => {
     if (!zoom) return;
     const onKey = (e: KeyboardEvent) => {
@@ -217,8 +239,18 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
 
           <div
             ref={gridRef}
-            className="relative flex-1 min-w-0 self-start aspect-square rounded-xl border border-slate-200 dark:border-slate-800 grid grid-cols-2 grid-rows-2"
+            className={`relative flex-1 min-w-0 self-start aspect-square rounded-xl border border-slate-200 dark:border-slate-800 ${zooming ? 'overflow-hidden' : ''}`}
           >
+            <motion.div
+              key={zoomKey}
+              className="absolute inset-0 grid grid-cols-2 grid-rows-2"
+              style={{ transformOrigin: zoomOrigin.current }}
+              initial={zoomFrom ? { scale: zoomFrom.scale, opacity: 0.55 } : false}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              onAnimationStart={() => setZooming(true)}
+              onAnimationComplete={() => setZooming(false)}
+            >
             {(zoom ? [zoom] : (['important', 'urgent', 'questionable', 'needed'] as Quadrant[])).map((q) => (
               <div key={q} onDoubleClick={() => setZoom(zoom ? null : q)} title={zoom ? 'Double-click to zoom back out' : `Double-click to zoom in on ${QUADRANTS[q].name}`} className={`relative select-none transition-colors ${zoom ? 'col-span-2 row-span-2 rounded-xl' : { important: 'rounded-tl-xl', urgent: 'rounded-tr-xl', questionable: 'rounded-bl-xl', needed: 'rounded-br-xl' }[q]} ${hover === q ? `${QUADRANTS[q].lit} ring-2 ring-inset z-[5]` : QUADRANTS[q].tint
               } border-slate-200/80 dark:border-slate-800 ${!zoom && (q === 'important' || q === 'questionable') ? 'border-r' : ''} ${!zoom && (q === 'important' || q === 'urgent') ? 'border-b' : ''}`}>
@@ -258,6 +290,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 Drag cards from the tray below onto the grid
               </p>
             )}
+            </motion.div>
           </div>
         </div>
 
