@@ -1001,7 +1001,7 @@ export default function App() {
       />
 
       {/* Main Views */}
-      <main className="flex-1 mt-1 flex flex-col">
+      <main className={`flex-1 mt-1 flex flex-col ${!isDealOpen && viewMode === 'matrix' ? 'matrix-dots' : ''}`}>
         {isDealOpen ? (
           <DealView
             cards={filteredCards}
