@@ -1035,6 +1035,7 @@ export default function App() {
             onOpenCard={setEditingCard}
             onStartWork={handleStartWork}
             onUseMatrixOrder={handleUseMatrixOrder}
+            onSetEstimate={handleSetEstimate}
             onReopen={handleReopenCard}
             onOpenArchivedCard={setViewingArchivedCard}
           />

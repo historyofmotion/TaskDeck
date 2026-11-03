@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, PanInfo, useMotionValue } from 'motion/react';
-import { AlertCircle, ArrowRight, ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, Info, ListOrdered, Pencil, Play, Star, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertCircle, ArrowRight, ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, Info, ListOrdered, Pencil, Play, Star, Undo2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Area, CardItem, Column, ColumnRole } from '../types';
 import { extractUrls, formatDueDateLabel, formatHours, getColumnRole } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
@@ -78,6 +78,8 @@ const RECENT_DAYS = 7;
 // A placed card whose board rank differs from the matrix order
 type RankHint = { dir: 'up' | 'down'; angle: number; text: string };
 
+const ESTIMATE_PRESETS = [0.25, 0.5, 1, 2, 4, 8];
+
 interface MatrixViewProps {
   cards: CardItem[]; // board cards after search / project filter
   archiveCards: CardItem[];
@@ -88,6 +90,7 @@ interface MatrixViewProps {
   onOpenCard: (card: CardItem) => void;
   onStartWork: (cardId: string) => void;
   onUseMatrixOrder: () => void;
+  onSetEstimate: (cardId: string, hours: number) => void;
   onReopen: (cardId: string, pos: { x: number; y: number } | null) => void; // Done → open again (optionally placed)
   onOpenArchivedCard: (card: CardItem) => void;
 }
@@ -102,6 +105,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   onOpenCard,
   onStartWork,
   onUseMatrixOrder,
+  onSetEstimate,
   onReopen,
   onOpenArchivedCard,
 }) => {
@@ -484,6 +488,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 hint={rankHint.get(selected.id)}
                 area={areaById.get(selected.areaId || '')}
                 working={selected.id === workingCardId}
+                onSetEstimate={archiveIds.has(selected.id) ? undefined : (h) => onSetEstimate(selected.id, h)}
                 onStart={() => onStartWork(selected.id)}
                 onEdit={() => (archiveIds.has(selected.id) ? onOpenArchivedCard(selected) : onOpenCard(selected))}
                 onNotDone={() => onReopen(selected.id, null)}
@@ -687,10 +692,12 @@ const Details: React.FC<{
   hint?: RankHint;
   area?: Area;
   working: boolean;
+  onSetEstimate?: (hours: number) => void; // not for archived cards
   onStart: () => void;
   onEdit: () => void;
   onNotDone: () => void;
-}> = ({ card, role, hint, area, working, onStart, onEdit, onNotDone }) => {
+}> = ({ card, role, hint, area, working, onSetEstimate, onStart, onEdit, onNotDone }) => {
+  const [editingEstimate, setEditingEstimate] = useState(false);
   const isDone = role === 'done';
   const due = formatDueDateLabel(card.dueDate);
   const q = card.matrix ? QUADRANTS[quadrantOf(card.matrix)] : null;
@@ -743,13 +750,60 @@ const Details: React.FC<{
           ))}
         </div>
       )}
+      {onSetEstimate && !isDone && (!card.estimateHours || editingEstimate) && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">How long?</span>
+          {ESTIMATE_PRESETS.map((h) => (
+            <button
+              key={h}
+              onClick={() => {
+                onSetEstimate(h);
+                setEditingEstimate(false);
+              }}
+              aria-pressed={card.estimateHours === h}
+              className={`px-2 py-0.5 rounded-md border text-xs ${
+                card.estimateHours === h
+                  ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                  : 'border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              {formatHours(h)}
+            </button>
+          ))}
+          {editingEstimate && (
+            <button
+              onClick={() => setEditingEstimate(false)}
+              title="Keep the current estimate"
+              aria-label="Cancel"
+              className="p-0.5 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-        <Clock className="w-3.5 h-3.5" />
-        <span>
-          {card.trackedSeconds ? `${formatTracked(card.trackedSeconds)} of ` : ''}
-          {formatHours(card.estimateHours) || 'No estimate'}
-          {due.label && !(due.isOverdue && !isDone) ? ` · ${due.label}` : ''}
-        </span>
+        {onSetEstimate && !isDone && card.estimateHours && !editingEstimate ? (
+          // Click the time to change it
+          <button
+            onClick={() => setEditingEstimate(true)}
+            title="Change the estimate"
+            className="flex items-center gap-1.5 -mx-1.5 px-1.5 py-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            {card.trackedSeconds ? `${formatTracked(card.trackedSeconds)} of ` : ''}
+            {formatHours(card.estimateHours)}
+          </button>
+        ) : (
+          <>
+            <Clock className="w-3.5 h-3.5" />
+            <span>
+              {card.trackedSeconds ? `${formatTracked(card.trackedSeconds)} of ` : ''}
+              {formatHours(card.estimateHours) || 'No estimate'}
+            </span>
+          </>
+        )}
+        {due.label && !(due.isOverdue && !isDone) && <span>· {due.label}</span>}
         {due.isOverdue && !isDone && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300">
             <AlertCircle className="w-3 h-3" />
