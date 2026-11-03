@@ -29,6 +29,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
 
   const shortcuts = [
     { key: 'N', label: 'Create new task' },
+    { key: '1 / 2 / 3 / 4', label: 'Go to Deal / Matrix / Board / List' },
     { key: 'V', label: 'Next view: Board → Matrix → Deal' },
     { key: 'Shift + V', label: 'Go to the List view' },
     { key: 'M', label: 'Go to the Matrix view' },
@@ -41,7 +42,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
     { key: 'Esc', label: 'Leave zoomed column / close dialog / clear search' },
     { key: '?', label: 'Open this help' },
     { key: '← / →  (Deal)', label: 'Not now / Done on the current card' },
-    { key: '1–4  (Deal 4-up)', label: 'Pick one of the four cards' },
+    { key: 'A / D  (Deal)', label: 'Look one card left / right through the deck' },
+    { key: 'S  (Deal)', label: 'Show details: the picked card on its own' },
     { key: 'F  (Deal)', label: 'Switch 1-up / 4-up' },
     { key: 'Z  (Deal)', label: 'Undo the last card played' },
   ];

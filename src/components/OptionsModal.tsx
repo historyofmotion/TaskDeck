@@ -35,6 +35,7 @@ interface OptionsModalProps {
   onDeleteColumn: (columnId: string) => void;
   onUpdateAreas: (newAreas: Area[]) => void;
   onDeleteArea: (areaId: string, reassignAreaId: string | null) => void;
+  onOpenHelp: () => void;
   onClose: () => void;
 }
 
@@ -50,6 +51,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onDeleteColumn,
   onUpdateAreas,
   onDeleteArea,
+  onOpenHelp,
   onClose,
 }) => {
   const modalRef = useModalAccessibility(true, onClose);
@@ -224,12 +226,22 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           <h2 id="options-modal-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             Options & Board Settings
           </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onOpenHelp}
+              title="Help & Keyboard Shortcuts (Shortcut: ?)"
+              aria-label="Help and Keyboard Shortcuts"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-bold text-sm"
+            >
+              ?
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Switcher */}

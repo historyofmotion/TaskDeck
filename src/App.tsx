@@ -24,7 +24,6 @@ import {
   BoardFileContents,
 } from './utils/storage';
 import {
-  generatePlainTextCopy,
   moveCardToColumnEnd,
   normalizePriorities,
   reorderCardsInGlobalSequence,
@@ -73,7 +72,7 @@ export default function App() {
   const [viewingArchivedCard, setViewingArchivedCard] = useState<CardItem | null>(null);
   const [isOptionsOpen, setIsOptionsOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-  const [isDealOpen, setIsDealOpen] = useState<boolean>(false);
+  const [isDealOpen, setIsDealOpen] = useState<boolean>(true);
   const [work, setWorkState] = useState<WorkState | null>(loadWorkState);
   const setWork = (w: WorkState | null) => {
     setWorkState(w);
@@ -294,7 +293,8 @@ export default function App() {
       if (editingCard || isNewCardModalOpen || viewingArchivedCard || isOptionsOpen || isHelpOpen || pendingStarCard || pendingFileSync) {
         return;
       }
-      if (isDealOpen && !'vVmM'.includes(e.key)) return; // Deal has its own keys, except V and M which leave it
+      if (isDealOpen && !'vVmM1234'.includes(e.key)) return; // Deal has its own keys, except the view keys (V, M, 1–4) which leave it
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
@@ -322,6 +322,15 @@ export default function App() {
             setViewMode(next);
             setIsDealOpen(false);
           }
+        }
+      } else if (e.key >= '1' && e.key <= '4') {
+        // 1 Deal, 2 Matrix, 3 Board, 4 List: the order of the buttons across the top
+        e.preventDefault();
+        if (e.key === '1') {
+          setIsDealOpen(true);
+        } else {
+          setViewMode(e.key === '2' ? 'matrix' : e.key === '3' ? 'board' : 'list');
+          setIsDealOpen(false);
         }
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
@@ -351,19 +360,6 @@ export default function App() {
     boardData.columns, // N picks a column, so it needs the current list
     quickAddColumnId,
   ]);
-
-  // Copy board state to clipboard
-  const handleCopyBoard = () => {
-    const text = generatePlainTextCopy(boardData);
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        addToast('Board status copied to clipboard!', 'success');
-      })
-      .catch(() => {
-        addToast('Failed to copy to clipboard.', 'error');
-      });
-  };
 
   // Filtered Cards logic
   const areaMap = useMemo(() => new Map(boardData.areas.map((a) => [a.id, a])), [boardData.areas]);
@@ -969,9 +965,7 @@ export default function App() {
           setIsNewCardModalOpen(true);
         }}
         onOpenOptions={() => setIsOptionsOpen(true)}
-        onOpenHelp={() => setIsHelpOpen(true)}
         onOpenDeal={() => setIsDealOpen((open) => !open)}
-        onCopyBoard={handleCopyBoard}
       />
 
       {/* Action Line Focus Banner */}
@@ -1128,6 +1122,10 @@ export default function App() {
           onDeleteColumn={handleDeleteColumn}
           onUpdateAreas={handleUpdateAreas}
           onDeleteArea={handleDeleteArea}
+          onOpenHelp={() => {
+            setIsOptionsOpen(false);
+            setIsHelpOpen(true);
+          }}
           onClose={() => setIsOptionsOpen(false)}
         />
       )}

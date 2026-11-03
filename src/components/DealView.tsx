@@ -372,14 +372,39 @@ export const DealView: React.FC<DealViewProps> = ({
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         setLayout(isFour ? 'single' : 'four');
-      } else if (isFour && /^[1-4]$/.test(e.key) && faceUp[Number(e.key) - 1]) {
+      } else if (e.key === 'a' || e.key === 'A' || e.key === 'd' || e.key === 'D') {
+        // A / D: move to the card on the left / right, stopping at either end of the deck.
+        // 4 up: the picked card moves with you and the window scrolls when you pass its edge.
         e.preventDefault();
-        setSelectedId(faceUp[Number(e.key) - 1].id);
+        const step = e.key === 'a' || e.key === 'A' ? -1 : 1;
+        if (!isFour) {
+          const next = Math.max(0, Math.min(liveDeck.length - faceCount, start + step));
+          if (next !== start) {
+            setMotionDir({ dir: step, undo: false, scrub: true });
+            setPos(next);
+          }
+        } else {
+          const picked = liveDeck.findIndex((c) => c.id === selectedId);
+          const here = picked >= start && picked < start + faceCount ? picked : start;
+          const to = Math.max(0, Math.min(liveDeck.length - 1, here + step));
+          if (to !== here || picked !== here) {
+            if (to < start || to >= start + faceCount) {
+              setMotionDir({ dir: step, undo: false, scrub: true });
+              setPos(to < start ? to : to - faceCount + 1);
+            }
+            setSelectedId(liveDeck[to].id);
+          }
+        }
+      } else if (e.key === 's' || e.key === 'S') {
+        // S: details. From 4 up, open the picked card (or the first) on its own
+        e.preventDefault();
+        const pick = faceUp.find((c) => c.id === selectedId) || faceUp[0];
+        if (isFour && pick) openSingle(pick.id);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [play, undo, onClose, isFour, faceUp, openBlockedId, openDeckId, openPile, pileSelId, plays, paused]);
+  }, [play, undo, onClose, isFour, faceUp, openBlockedId, openDeckId, openPile, pileSelId, plays, paused, liveDeck, faceCount, start, selectedId]);
 
 
   const weekday = new Date().toLocaleDateString(undefined, { weekday: 'long' });
@@ -434,8 +459,19 @@ export const DealView: React.FC<DealViewProps> = ({
           </span>
           <HowItWorks filterLabel={filterLabel} />
           {/* On wide screens the switch sits beside the cards instead (see the table below) */}
-          <LayoutSwitch layout={layout} onChange={setLayout} className="ml-auto lg:hidden" />
-          <span className="hidden lg:block ml-auto" />
+          <div className="flex-1 min-w-0 flex justify-center">
+            {liveDeck.length > faceCount && (
+              <ScrubBar
+                cards={liveDeck}
+                start={start}
+                visible={faceCount}
+                areaById={areaById}
+                onScrub={scrubTo}
+                className="w-full max-w-[560px]"
+              />
+            )}
+          </div>
+          <LayoutSwitch layout={layout} onChange={setLayout} className="lg:hidden" />
           <span className="text-sm text-[#f3efe4]/70 whitespace-nowrap">
             {plays.length} of {dealSize} played
           </span>
@@ -447,14 +483,6 @@ export const DealView: React.FC<DealViewProps> = ({
           >
             <Undo2 className="w-4 h-4" />
             <span className="hidden sm:inline">Undo</span>
-          </button>
-          <button
-            onClick={onClose}
-            title="Back to the board (Esc or T)"
-            aria-label="Back to the board"
-            className="p-1.5 rounded-md hover:bg-white/10"
-          >
-            <X className="w-5 h-5" />
           </button>
         </header>
 
@@ -544,16 +572,6 @@ export const DealView: React.FC<DealViewProps> = ({
 
           {/* Center: the card(s) in play */}
           <div className="order-1 lg:order-2 flex flex-col items-center gap-6">
-            {liveDeck.length > faceCount && (
-              <ScrubBar
-                cards={liveDeck}
-                start={start}
-                visible={faceCount}
-                areaById={areaById}
-                onScrub={scrubTo}
-                className={isFour ? 'w-[min(92vw,600px)]' : 'w-[min(88vw,420px)]'}
-              />
-            )}
             {/* Drop zone: a pile card dragged here comes back into play */}
             <div
               id="deal-drop-zone"
@@ -571,7 +589,7 @@ export const DealView: React.FC<DealViewProps> = ({
             )}
             {isFour ? (
               current ? (
-                <div key="four-up" data-drop-target className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,600px)] animate-in fade-in duration-150">
+                <div key="four-up" data-drop-target className="relative grid grid-cols-1 sm:grid-cols-2 gap-4 w-[min(92vw,780px)] animate-in fade-in duration-150">
                   <LayoutSwitch layout={layout} onChange={setLayout} vertical className="hidden lg:flex absolute left-full bottom-0 ml-3 z-10" />
 
                   <AnimatePresence initial={false} custom={{ ...motionDir, compact: true }}>
@@ -680,7 +698,7 @@ export const DealView: React.FC<DealViewProps> = ({
                       <br />
                       {target
                         ? 'The buttons and arrow keys act on the outlined card.'
-                        : 'Click a card (or press 1–4) to pick it for the buttons and arrow keys.'}{' '}
+                        : 'Click a card to pick it for the buttons and arrow keys.'}{' '}
                       Double-click a card to see it alone.
                     </>
                   )}
@@ -914,6 +932,9 @@ const DealCard: React.FC<DealCardProps> = ({
   const [editingEstimate, setEditingEstimate] = useState(false);
   // The DONE / NOT NOW stamps belong to dragging the card, not to the slide-in used when scrubbing
   const [dragging, setDragging] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  // 4 up: Start and Edit show only on the picked card or the one under the mouse
+  const showActions = !compact || selected || hovered;
   const tilt = useTransform(x, [-300, 300], [-14, 14]);
   const doneHint = useTransform(x, [20, SWIPE_DISTANCE], [0, 1]);
   const laterHint = useTransform(x, [-SWIPE_DISTANCE, -20], [1, 0]);
@@ -932,7 +953,7 @@ const DealCard: React.FC<DealCardProps> = ({
       {...noDrag}
       onClick={onStartWork}
       title="Start the timer: you're working on this card now"
-      className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-[#d8d1c0] text-xs font-medium text-[#4a4840] hover:bg-[#efe9da]"
+      className={`flex items-center gap-1 px-2 py-0.5 rounded-md border border-[#d8d1c0] text-xs font-medium text-[#4a4840] hover:bg-[#efe9da] focus-visible:opacity-100 ${showActions ? '' : 'opacity-0'}`}
     >
       <Play className="w-3 h-3" />
       Start
@@ -969,6 +990,8 @@ const DealCard: React.FC<DealCardProps> = ({
       }}
       onTap={onSelect}
       onDoubleClick={onOpenSingle}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         x,
         rotate: tilt,
@@ -982,7 +1005,7 @@ const DealCard: React.FC<DealCardProps> = ({
       aria-label={compact ? `Card ${slot}: ${card.title}${selected ? ' (selected)' : ''}` : undefined}
       className={`${
         compact
-          ? 'relative h-[min(36vh,290px)] py-5 px-9 [grid-row:var(--slot-stack)] [grid-column:1] sm:[grid-row:var(--slot-row)] sm:[grid-column:var(--slot-col)]'
+          ? 'relative h-[min(28vh,230px)] py-4 px-9 [grid-row:var(--slot-stack)] [grid-column:1] sm:[grid-row:var(--slot-row)] sm:[grid-column:var(--slot-col)]'
           : 'absolute inset-0 py-8 px-12 sm:px-14 sm:py-10'
       } isolate overflow-hidden rounded-2xl bg-[#faf7ef] text-[#1d1d1b] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.55)] flex flex-col cursor-grab select-none touch-none ${
         compact && selected ? 'ring-2 ring-[#f3efe4] ring-offset-4 ring-offset-[#1f3a32]' : ''
@@ -1026,7 +1049,7 @@ const DealCard: React.FC<DealCardProps> = ({
             onDoubleClick={(e) => e.stopPropagation()}
             title="Edit this card"
             aria-label={`Edit ${card.title}`}
-            className="-mr-1 p-1 rounded-md text-[#8a867b] hover:text-[#1d1d1b] hover:bg-[#efe9da] shrink-0"
+            className={`-mr-1 p-1 rounded-md text-[#8a867b] hover:text-[#1d1d1b] hover:bg-[#efe9da] shrink-0 focus-visible:opacity-100 ${showActions ? '' : 'opacity-0'}`}
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>

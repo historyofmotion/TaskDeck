@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, PanInfo, useMotionValue } from 'motion/react';
-import { ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, ListOrdered, Pencil, Play, Star, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowRight, ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, Info, ListOrdered, Pencil, Play, Star, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Area, CardItem, Column, ColumnRole } from '../types';
 import { extractUrls, formatDueDateLabel, formatHours, getColumnRole } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
@@ -75,6 +75,9 @@ const ROLE_ORDER: Record<string, number> = { active: 0, blocked: 1, pending: 2 }
 
 const RECENT_DAYS = 7;
 
+// A placed card whose board rank differs from the matrix order
+type RankHint = { dir: 'up' | 'down'; angle: number; text: string };
+
 interface MatrixViewProps {
   cards: CardItem[]; // board cards after search / project filter
   archiveCards: CardItem[];
@@ -146,6 +149,40 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   const unplaced = open
     .filter((c) => !c.matrix)
     .sort((a, b) => (ROLE_ORDER[roleOf(a) || 'pending'] ?? 3) - (ROLE_ORDER[roleOf(b) || 'pending'] ?? 3) || a.priority - b.priority);
+
+  // Where each placed card would rank by the matrix (starred on top, then quadrant, then nearest the top-right)
+  // versus where it ranks now: 'up' = the matrix would rank it higher, 'down' = lower
+  const rankHint = useMemo(() => {
+    const byMatrix = [...placed].sort(
+      (a, b) =>
+        Number(!!b.starred) - Number(!!a.starred) ||
+        QUADRANT_ORDER.indexOf(quadrantOf(a.matrix!)) - QUADRANT_ORDER.indexOf(quadrantOf(b.matrix!)) ||
+        matrixScore(b.matrix!) - matrixScore(a.matrix!) ||
+        a.priority - b.priority
+    );
+    const m = new Map<string, RankHint>();
+    byMatrix.forEach((c, i) => {
+      const now = placed.findIndex((p) => p.id === c.id);
+      if (i === now) return;
+      const dir = i < now ? 'up' : 'down';
+      // the arrow points (on the grid) at the spot it would take to fit the board's order: the matrix spot
+      // that sits at its current board rank
+      const slot = byMatrix[now].matrix!;
+      const dx = slot.x - c.matrix!.x;
+      const dy = -(slot.y - c.matrix!.y);
+      const angle = dx || dy ? (Math.atan2(dy, dx) * 180) / Math.PI : dir === 'up' ? 135 : -45;
+      // where it is listed on the board now
+      const inColumn = cards.filter((x) => x.columnId === c.columnId).sort((a, b) => a.priority - b.priority);
+      const colName = columns.find((col) => col.id === c.columnId)?.name || 'its column';
+      m.set(c.id, {
+        dir,
+        angle,
+        text: `Board: #${inColumn.findIndex((x) => x.id === c.id) + 1} in ${colName}. The matrix would rank it ${dir === 'up' ? 'higher' : 'lower'}.`,
+      });
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards, columns]);
 
   const urgent = placed
     .filter((c) => quadrantOf(c.matrix!) === 'urgent')
@@ -223,7 +260,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   });
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto px-4 pb-6 grid grid-cols-1 xl:grid-cols-[auto_320px] justify-center gap-5">
+    <div className="w-full max-w-[1600px] mx-auto px-4 pb-6 grid grid-cols-1 xl:grid-cols-[320px_auto_320px] justify-center gap-5">
       {/* ---- The matrix (sized so each quadrant is a square) ---- */}
       <div className="min-w-0 mx-auto w-[min(92vw,900px,max(460px,calc(100vh-18rem)))]">
         <div className="flex">
@@ -281,7 +318,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                   key={`${c.id}:${c.matrix!.x}:${c.matrix!.y}:${zoom || ''}`}
                   card={c}
                   pos={zoom ? { x: (c.matrix!.x - ORIGIN[zoom].x) * 2, y: (c.matrix!.y - ORIGIN[zoom].y) * 2 } : c.matrix!}
-                  chip={chipProps(c)}
+                  chip={{ ...chipProps(c), hint: rankHint.get(c.id) }}
                 />
               ))}
 
@@ -341,25 +378,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
       </div>
 
       {/* ---- Side panel ---- */}
-      <aside className="flex flex-col gap-4 min-w-0">
-        {/* the point of this view: turn the placement into the board's ranking */}
-        <section className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4 flex flex-col gap-2">
-          <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Rank your board from this matrix</p>
-          <p className="text-xs text-indigo-800/80 dark:text-indigo-200/80 leading-relaxed">
-            Urgent first, then Important, Needed, Questionable; nearest the top-right corner first within each. Starred cards stay on top, and cards you haven't placed follow.
-          </p>
-          <button
-            onClick={onUseMatrixOrder}
-            disabled={placed.length === 0}
-            title="Renumber the board's ranks from where the cards sit on the matrix"
-            className="mt-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm disabled:opacity-40 disabled:hover:bg-indigo-600"
-          >
-            <ListOrdered className="w-4 h-4" />
-            Use matrix order for ranks
-          </button>
-          {placed.length === 0 && <p className="text-[11px] text-indigo-800/70 dark:text-indigo-200/70">Place some cards first.</p>}
-        </section>
-
+      <aside className="flex flex-col gap-4 min-w-0 xl:order-first xl:border-r xl:border-slate-200 xl:dark:border-slate-800 xl:pr-5">
         <section>
           <p className="text-xs text-slate-500 dark:text-slate-400">Your Urgent corner</p>
           <p className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
@@ -375,7 +394,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 <li key={c.id}>
                   <button
                     onClick={() => setSelectedId(c.id)}
-                    className={`w-full flex items-center gap-2 py-1.5 text-left text-xs hover:text-emerald-700 dark:hover:text-emerald-300 ${
+                    className={`w-full flex items-center gap-2 py-1.5 text-left text-xs cursor-pointer hover:text-emerald-700 dark:hover:text-emerald-300 ${
                       selected?.id === c.id ? 'text-emerald-700 dark:text-emerald-300 font-medium' : 'text-slate-700 dark:text-slate-300'
                     }`}
                   >
@@ -388,31 +407,6 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             </ol>
           )}
         </section>
-
-        {/* details of the selected card */}
-        <AnimatePresence mode="wait">
-          {selected && (
-            <motion.section
-              key={selected.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.15 }}
-              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col gap-2 shadow-xs"
-            >
-              <Details
-                card={selected}
-                role={roleOf(selected)}
-                area={areaById.get(selected.areaId || '')}
-                working={selected.id === workingCardId}
-                onStart={() => onStartWork(selected.id)}
-                onEdit={() => (archiveIds.has(selected.id) ? onOpenArchivedCard(selected) : onOpenCard(selected))}
-                onNotDone={() => onReopen(selected.id, null)}
-              />
-            </motion.section>
-          )}
-        </AnimatePresence>
-
 
         {/* finished in the last week, folded away until you want one back */}
         {recentDone.length > 0 && (
@@ -452,6 +446,65 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
           </section>
         )}
       </aside>
+
+      <aside className="flex flex-col gap-4 min-w-0 xl:border-l xl:border-slate-200 xl:dark:border-slate-800 xl:pl-5">
+        {/* details of the selected card */}
+        <AnimatePresence mode="wait">
+          {selected && (
+            <motion.section
+              key={selected.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
+              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col gap-2 shadow-xs"
+            >
+              <Details
+                card={selected}
+                role={roleOf(selected)}
+                hint={rankHint.get(selected.id)}
+                area={areaById.get(selected.areaId || '')}
+                working={selected.id === workingCardId}
+                onStart={() => onStartWork(selected.id)}
+                onEdit={() => (archiveIds.has(selected.id) ? onOpenArchivedCard(selected) : onOpenCard(selected))}
+                onNotDone={() => onReopen(selected.id, null)}
+              />
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* the point of this view: turn the placement into the board's ranking */}
+        <section className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4 flex flex-col gap-2">
+          <div className="group relative flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Rank your board from this matrix</p>
+            <button
+              type="button"
+              aria-label="How the matrix order works"
+              aria-describedby="matrix-order-info"
+              className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-100 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+            <div
+              id="matrix-order-info"
+              role="tooltip"
+              className="pointer-events-none absolute left-0 top-full mt-2 z-20 w-64 rounded-lg bg-slate-900 text-slate-100 text-xs leading-relaxed p-3 shadow-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+            >
+              Urgent first, then Important, Needed, Questionable; nearest the top-right corner first within each. Starred cards stay on top, and cards you haven't placed follow.
+            </div>
+          </div>
+          <button
+            onClick={onUseMatrixOrder}
+            disabled={placed.length === 0}
+            title="Renumber the board's ranks from where the cards sit on the matrix"
+            className="mt-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm disabled:opacity-40 disabled:hover:bg-indigo-600"
+          >
+            <ListOrdered className="w-4 h-4" />
+            Use matrix order for ranks
+          </button>
+          {placed.length === 0 && <p className="text-[11px] text-indigo-800/70 dark:text-indigo-200/70">Place some cards first.</p>}
+        </section>
+      </aside>
     </div>
   );
 };
@@ -481,19 +534,23 @@ const PlacedChip: React.FC<{
     if (wrapRef.current?.parentElement) ro.observe(wrapRef.current.parentElement);
     return () => ro.disconnect();
   }, [m.x, card.title, card.starred, chip.role]);
+  const left = `clamp(${DOT_OFFSET}px, ${m.x * 100}%, calc(100% - ${DOT_OFFSET}px))`;
+  const top = `clamp(14px, ${(1 - m.y) * 100}%, calc(100% - 14px))`;
   return (
-    <div
-      ref={wrapRef}
-      className={`absolute w-max max-w-[190px] ${lifted ? 'z-50' : chip.selected ? 'z-40' : 'z-10'}`}
-      style={{
-        // never closer than a pill's half-height / circle offset to an edge (cards on a quadrant's border sit just inside it)
-        left: `clamp(${DOT_OFFSET}px, ${m.x * 100}%, calc(100% - ${DOT_OFFSET}px))`,
-        top: `clamp(14px, ${(1 - m.y) * 100}%, calc(100% - 14px))`,
-        transform: flip ? `translate(calc(-100% + ${DOT_OFFSET}px), -50%)` : `translate(-${DOT_OFFSET}px, -50%)`,
-      }}
-    >
-      <Chip {...chip} flip={flip} onDragging={setLifted} />
-    </div>
+    <>
+      <div
+        ref={wrapRef}
+        className={`absolute w-max max-w-[190px] ${lifted ? 'z-50' : chip.selected ? 'z-40' : 'z-10'}`}
+        style={{
+          // never closer than a pill's half-height / circle offset to an edge (cards on a quadrant's border sit just inside it)
+          left,
+          top,
+          transform: flip ? `translate(calc(-100% + ${DOT_OFFSET}px), -50%)` : `translate(-${DOT_OFFSET}px, -50%)`,
+        }}
+      >
+        <Chip {...chip} flip={flip} onDragging={setLifted} />
+      </div>
+    </>
   );
 };
 
@@ -510,10 +567,11 @@ const Chip: React.FC<{
   onSelect: () => void;
   onOpen: () => void;
   flip?: boolean; // circle on the right, title to its left
+  hint?: RankHint; // the matrix order would rank this card differently than the board does now
   onDragging?: (dragging: boolean) => void;
   onDragMove: (e: MouseEvent | TouchEvent | PointerEvent, dot: Point) => void;
   onDrop: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo, dot: Point) => boolean;
-}> = ({ card, role, area, selected, working, flip, onDragging, onSelect, onOpen, onDragMove, onDrop }) => {
+}> = ({ card, role, area, selected, working, flip, hint, onDragging, onSelect, onOpen, onDragMove, onDrop }) => {
   const dotRef = useRef<HTMLSpanElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -561,7 +619,7 @@ const Chip: React.FC<{
       onTap={onSelect}
       onDoubleClick={onOpen}
       title={`${card.title}${blocked ? ' (blocked)' : active ? ' (in progress)' : done ? ' (done)' : ''}`}
-      className={`relative flex items-center gap-1.5 h-7 max-w-[190px] ${flip ? 'flex-row-reverse pr-1.5 pl-2.5' : 'pl-1.5 pr-2.5'} rounded-full border text-xs font-medium shadow-xs cursor-grab touch-none select-none whitespace-nowrap ${
+      className={`relative flex items-center gap-1.5 h-6 max-w-[170px] ${flip ? 'flex-row-reverse pr-1.5 pl-2.5' : 'pl-1.5 pr-2.5'} rounded-full border text-[10px] font-medium shadow-xs cursor-grab touch-none select-none whitespace-nowrap ${
         done
           ? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'
           : blocked
@@ -588,6 +646,14 @@ const Chip: React.FC<{
       {(active || blocked) && area && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: area.color }} />}
       <span className={`truncate ${blocked ? 'line-through decoration-red-300/70' : done ? 'line-through decoration-slate-300 dark:decoration-slate-600' : ''}`}>{card.title}</span>
       {card.starred && <Star className="w-3 h-3 shrink-0 fill-amber-400 text-amber-500" />}
+      {hint && (
+        <span
+          className="shrink-0 text-slate-600 dark:text-slate-300 opacity-90"
+          title={`${hint.text} The arrow points toward where it would sit to match the board's order.`}
+        >
+          <ArrowRight className="w-2.5 h-2.5" style={{ transform: `rotate(${hint.angle}deg)` }} />
+        </span>
+      )}
     </motion.button>
   );
 };
@@ -597,12 +663,13 @@ const Chip: React.FC<{
 const Details: React.FC<{
   card: CardItem;
   role?: ColumnRole;
+  hint?: RankHint;
   area?: Area;
   working: boolean;
   onStart: () => void;
   onEdit: () => void;
   onNotDone: () => void;
-}> = ({ card, role, area, working, onStart, onEdit, onNotDone }) => {
+}> = ({ card, role, hint, area, working, onStart, onEdit, onNotDone }) => {
   const isDone = role === 'done';
   const due = formatDueDateLabel(card.dueDate);
   const q = card.matrix ? QUADRANTS[quadrantOf(card.matrix)] : null;
@@ -625,6 +692,12 @@ const Details: React.FC<{
         </span>
       </div>
       <h3 className="text-base font-semibold leading-snug text-slate-900 dark:text-slate-100 break-words">{card.title}</h3>
+      {hint && (
+        <p className="flex items-start gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+          <ArrowRight className="w-3 h-3 shrink-0 mt-px" style={{ transform: `rotate(${hint.angle}deg)` }} />
+          <span title={hint.text}>{hint.dir === 'up' ? 'Ranked lower in board' : 'Ranked higher in board'}</span>
+        </p>
+      )}
       {text && <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line line-clamp-4 break-words">{text}</p>}
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
