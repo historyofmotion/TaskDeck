@@ -30,6 +30,7 @@ interface TopBarProps {
   onNewCard: () => void;
   onOpenOptions: () => void;
   onOpenDeal: () => void;
+  workSlot?: React.ReactNode; // what you're working on right now
   dealOpen: boolean; // Deal is showing instead of the board / list / matrix
 }
 
@@ -48,6 +49,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenOptions,
   onOpenDeal,
   dealOpen,
+  workSlot,
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -196,6 +198,8 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Right Controls (All h-[34px] aligned) */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {workSlot}
+
           {/* Filter: find box on top, then the projects */}
           <div ref={filterRef} className="relative h-[34px]">
             <button

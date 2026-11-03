@@ -966,6 +966,7 @@ export default function App() {
         }}
         onOpenOptions={() => setIsOptionsOpen(true)}
         onOpenDeal={() => setIsDealOpen((open) => !open)}
+        workSlot={workIndicator('light')}
       />
 
       {/* Action Line Focus Banner */}
@@ -991,7 +992,6 @@ export default function App() {
       )}
 
       <ActionLine
-        workSlot={workIndicator('light')}
         cards={boardData.cards}
         columns={boardData.columns}
         onOpenCard={(cardId) => {

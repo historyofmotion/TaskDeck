@@ -28,17 +28,22 @@ body {
 }
 
 /* "Working" label on the card whose timer is running */
+/* Steady for a few seconds, then one slow breath: fades down and back over about 2 seconds, every 6 */
 @keyframes working-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(1.06); }
+  0%, 50%, 86%, 100% { opacity: 1; }
+  68% { opacity: 0.4; }
+}
+
+.working-pulse,
+.working-dim {
+  animation: working-pulse 6s ease-in-out infinite;
 }
 
 .working-pulse {
   display: inline-block;
-  animation: working-pulse 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .card-idle-wiggle { animation: none; }
-  .working-pulse { animation: none; }
+  .working-pulse, .working-dim { animation: none; }
 }

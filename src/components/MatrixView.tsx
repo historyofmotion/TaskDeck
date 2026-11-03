@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { animate, AnimatePresence, motion, PanInfo, useMotionValue } from 'motion/react';
-import { ArrowRight, ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, Info, ListOrdered, Pencil, Play, Star, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertCircle, ArrowRight, ArrowUp, Ban, Check, ChevronDown, ChevronRight, Clock, ExternalLink, Info, ListOrdered, Pencil, Play, Star, Undo2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Area, CardItem, Column, ColumnRole } from '../types';
 import { extractUrls, formatDueDateLabel, formatHours, getColumnRole } from '../utils/helpers';
 import { formatTracked } from '../utils/workTracking';
@@ -150,8 +150,10 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
     .filter((c) => !c.matrix)
     .sort((a, b) => (ROLE_ORDER[roleOf(a) || 'pending'] ?? 3) - (ROLE_ORDER[roleOf(b) || 'pending'] ?? 3) || a.priority - b.priority);
 
-  // Where each placed card would rank by the matrix (starred on top, then quadrant, then nearest the top-right)
-  // versus where it ranks now: 'up' = the matrix would rank it higher, 'down' = lower
+  // Which placed cards sit out of order: the board's order is compared with the matrix order (starred on top, then
+  // quadrant, then nearest the top-right). The longest run of cards already in matching order counts as in place,
+  // so one card dropped somewhere new is the only one flagged, not everything it pushes along.
+  // 'up' = the matrix would rank it higher than the board does, 'down' = lower.
   const rankHint = useMemo(() => {
     const byMatrix = [...placed].sort(
       (a, b) =>
@@ -160,17 +162,34 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         matrixScore(b.matrix!) - matrixScore(a.matrix!) ||
         a.priority - b.priority
     );
+    const mIdx = new Map(byMatrix.map((c, i) => [c.id, i]));
+    const seq = placed.map((c) => mIdx.get(c.id)!); // matrix position of each card, in board order
+    // longest increasing subsequence = the cards whose relative order already agrees
+    const len = seq.map(() => 1);
+    const prev = seq.map(() => -1);
+    for (let i = 0; i < seq.length; i++)
+      for (let j = 0; j < i; j++) if (seq[j] < seq[i] && len[j] + 1 > len[i]) (len[i] = len[j] + 1), (prev[i] = j);
+    let end = len.indexOf(Math.max(0, ...len));
+    const inPlace = new Set<number>();
+    for (; end >= 0; end = prev[end]) inPlace.add(end);
+
     const m = new Map<string, RankHint>();
-    byMatrix.forEach((c, i) => {
-      const now = placed.findIndex((p) => p.id === c.id);
-      if (i === now) return;
-      const dir = i < now ? 'up' : 'down';
-      // the arrow points (on the grid) at the spot it would take to fit the board's order: the matrix spot
-      // that sits at its current board rank
-      const slot = byMatrix[now].matrix!;
-      const dx = slot.x - c.matrix!.x;
-      const dy = -(slot.y - c.matrix!.y);
-      const angle = dx || dy ? (Math.atan2(dy, dx) * 180) / Math.PI : dir === 'up' ? 135 : -45;
+    placed.forEach((c, p) => {
+      if (inPlace.has(p)) return;
+      const before = [...inPlace].filter((j) => j < p).sort((x, y) => x - y);
+      const after = [...inPlace].filter((j) => j > p).sort((x, y) => x - y);
+      const matrixBefore = [...inPlace].filter((j) => seq[j] < seq[p]).length;
+      const dir = matrixBefore < before.length ? 'up' : 'down';
+      // the arrow points (on the grid) toward where it would sit to fit the board's order: between its
+      // neighbours that are in place (past the last one, or ahead of the first)
+      const here = c.matrix!;
+      const pa = before.length ? placed[before[before.length - 1]].matrix! : null;
+      const pb = after.length ? placed[after[0]].matrix! : null;
+      const target =
+        pa && pb ? { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } : pa ? { x: pa.x - 0.1, y: pa.y - 0.1 } : pb ? { x: pb.x + 0.1, y: pb.y + 0.1 } : here;
+      const dx = target.x - here.x;
+      const dy = -(target.y - here.y);
+      const angle = dx || dy ? (Math.atan2(dy, dx) * 180) / Math.PI : dir === 'up' ? -45 : 135;
       // where it is listed on the board now
       const inColumn = cards.filter((x) => x.columnId === c.columnId).sort((a, b) => a.priority - b.priority);
       const colName = columns.find((col) => col.id === c.columnId)?.name || 'its column';
@@ -590,6 +609,7 @@ const Chip: React.FC<{
   const blocked = role === 'blocked';
   const active = role === 'active';
   const done = role === 'done';
+  const overdue = !done && formatDueDateLabel(card.dueDate).isOverdue;
   return (
     <motion.button
       drag
@@ -618,7 +638,7 @@ const Chip: React.FC<{
       }}
       onTap={onSelect}
       onDoubleClick={onOpen}
-      title={`${card.title}${blocked ? ' (blocked)' : active ? ' (in progress)' : done ? ' (done)' : ''}`}
+      title={`${card.title}${overdue ? ' (overdue)' : ''}${blocked ? ' (blocked)' : active ? ' (in progress)' : done ? ' (done)' : ''}`}
       className={`relative flex items-center gap-1.5 h-6 max-w-[170px] ${flip ? 'flex-row-reverse pr-1.5 pl-2.5' : 'pl-1.5 pr-2.5'} rounded-full border text-[10px] font-medium shadow-xs cursor-grab touch-none select-none whitespace-nowrap ${
         done
           ? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'
@@ -636,7 +656,7 @@ const Chip: React.FC<{
           <Ban className="w-4 h-4 text-red-500 shrink-0" />
         ) : active ? (
           <span className="relative flex w-4 h-4 shrink-0 items-center justify-center rounded-full bg-emerald-500">
-            {working && <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" />}
+            {working && <span className="absolute inset-0 rounded-full bg-emerald-400 working-dim" />}
             <Play className="relative w-2.5 h-2.5 text-white fill-white" />
           </span>
         ) : (
@@ -646,6 +666,7 @@ const Chip: React.FC<{
       {(active || blocked) && area && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: area.color }} />}
       <span className={`truncate ${blocked ? 'line-through decoration-red-300/70' : done ? 'line-through decoration-slate-300 dark:decoration-slate-600' : ''}`}>{card.title}</span>
       {card.starred && <Star className="w-3 h-3 shrink-0 fill-amber-400 text-amber-500" />}
+      {overdue && <AlertCircle className="w-3 h-3 shrink-0 text-red-500" aria-label="Overdue" />}
       {hint && (
         <span
           className="shrink-0 text-slate-600 dark:text-slate-300 opacity-90"
@@ -727,8 +748,14 @@ const Details: React.FC<{
         <span>
           {card.trackedSeconds ? `${formatTracked(card.trackedSeconds)} of ` : ''}
           {formatHours(card.estimateHours) || 'No estimate'}
-          {due.label ? ` · ${due.label}` : ''}
+          {due.label && !(due.isOverdue && !isDone) ? ` · ${due.label}` : ''}
         </span>
+        {due.isOverdue && !isDone && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300">
+            <AlertCircle className="w-3 h-3" />
+            {due.label}
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-1">
           <button
             onClick={onEdit}

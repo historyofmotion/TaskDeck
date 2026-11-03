@@ -838,7 +838,7 @@ const CardDetails: React.FC<{
         ) : null}
         <LinkIcons text={card.description} showHost />
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-[#4a4840] border-t border-[#e3ddcf] pt-3">
-          {due.label && (<><dt className="text-[#8a867b]">Due</dt><dd className={due.isOverdue ? 'text-red-700 font-medium' : ''}>{due.label}</dd></>)}
+          {due.label && (<><dt className="text-[#8a867b]">Due</dt><dd className={due.isOverdue ? 'text-red-700 font-bold' : ''}>{due.label}</dd></>)}
           {card.estimateHours ? (<><dt className="text-[#8a867b]">Estimate</dt><dd>{formatHours(card.estimateHours)}</dd></>) : null}
           {card.trackedSeconds ? (<><dt className="text-[#8a867b]">Tracked</dt><dd>{formatTracked(card.trackedSeconds)}</dd></>) : null}
           {card.progress > 0 && (<><dt className="text-[#8a867b]">Progress</dt><dd>{card.progress}%</dd></>)}
@@ -945,7 +945,7 @@ const DealCard: React.FC<DealCardProps> = ({
 
   const startControl = working ? (
     <span className="flex items-center gap-1.5 text-xs font-semibold text-[#23824a]" title="The timer is running on this card">
-      <span className="w-2 h-2 rounded-full bg-[#2f9e57] animate-pulse motion-reduce:animate-none" />
+      <span className="w-2 h-2 rounded-full bg-[#2f9e57] working-dim" />
       <span className="working-pulse">Working</span>
     </span>
   ) : onStartWork ? (
@@ -1132,7 +1132,7 @@ const DealCard: React.FC<DealCardProps> = ({
           </div>
         )}
         {due.label && (
-          <span className={`ml-auto font-medium ${due.isOverdue ? 'text-red-700' : due.isToday ? 'text-amber-700' : ''}`}>
+          <span className={`ml-auto font-medium ${due.isOverdue ? 'px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold' : due.isToday ? 'text-amber-700' : ''}`}>
             {due.label}
           </span>
         )}
